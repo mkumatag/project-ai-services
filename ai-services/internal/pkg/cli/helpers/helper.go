@@ -3,6 +3,9 @@ package helpers
 import (
 	"fmt"
 	"io/fs"
+	"log"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"text/template"
@@ -12,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/project-ai-services/ai-services/assets"
+	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 )
 
@@ -144,4 +148,57 @@ func LoadMetadata(path string) (*AppMetadata, error) {
 		return nil, err
 	}
 	return &appMetadata, nil
+}
+
+func ListSpyreCards() ([]string, error) {
+	spyre_device_ids_list := []string{}
+	cmd := exec.Command("lspci", "-d", "1014:06a7")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return spyre_device_ids_list, fmt.Errorf("failed to get PCI devices attached to lpar: %v, output: %s", err, string(out))
+	}
+
+	pci_devices_str := string(out)
+
+	for _, pci_dev := range strings.Split(pci_devices_str, "\n") {
+		logger.Logger.Debug("Spyre card detected")
+		dev_id := strings.Split(pci_dev, " ")[0]
+		logger.Logger.Sugar().Debug("PCI id: %s", dev_id)
+		spyre_device_ids_list = append(spyre_device_ids_list, dev_id)
+	}
+
+	logger.Logger.Sugar().Info("List of discovered Spyre cards: ", spyre_device_ids_list)
+	return spyre_device_ids_list, nil
+}
+
+func FindFreeSpyreCards() ([]string, error) {
+	free_spyre_dev_id_list := []string{}
+	dev_files, err := os.ReadDir("/dev/vfio")
+	if err != nil {
+		log.Fatalf("failed to check device files under /dev/vfio. Error: %v", err)
+		return free_spyre_dev_id_list, err
+	}
+
+	for _, dev_file := range dev_files {
+		if dev_file.Name() == "vfio" {
+			continue
+		}
+		f, err := os.Open("/dev/vfio/" + dev_file.Name())
+		if err != nil {
+			logger.Logger.Debug("Device or resource busy, skipping..")
+			continue
+		}
+		f.Close()
+
+		// free card available to use
+		dev_pci_path := fmt.Sprintf("/sys/kernel/iommu_groups/%s/devices", dev_file.Name())
+		cmd := exec.Command("ls", dev_pci_path)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return free_spyre_dev_id_list, fmt.Errorf("failed to get pci address for the free spyre device: %v, output: %s", err, string(out))
+		}
+		pci := string(out)
+		free_spyre_dev_id_list = append(free_spyre_dev_id_list, pci)
+	}
+	return free_spyre_dev_id_list, nil
 }
