@@ -15,18 +15,22 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
+	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 )
 
 const (
 	applicationTemplatesPath = "applications/"
 )
 
-var extraContainerReadinessTimeout = 5 * time.Minute
-
-var templateName string
+var (
+	extraContainerReadinessTimeout = 5 * time.Minute
+	templateName                   string
+	envMutex                       sync.Mutex
+)
 
 var createCmd = &cobra.Command{
 	Use:   "create [name]",
@@ -66,12 +70,14 @@ var createCmd = &cobra.Command{
 			appTemplateName = appTemplateNames[index]
 		}
 
-		tmpls, err := helpers.LoadAllTemplates(applicationTemplatesPath + appTemplateName)
+		applicationPodTemplatesPath := applicationTemplatesPath + appTemplateName
+
+		tmpls, err := helpers.LoadAllTemplates(applicationPodTemplatesPath)
 		if err != nil {
 			return fmt.Errorf("failed to parse the templates: %w", err)
 		}
 
-		metadataFilePath := applicationTemplatesPath + appTemplateName + "/metadata.yaml"
+		metadataFilePath := applicationPodTemplatesPath + "/metadata.yaml"
 
 		// load metadata.yml to fetch the dependencies list
 		appMetadata, err := helpers.LoadMetadata(metadataFilePath)
@@ -83,6 +89,31 @@ var createCmd = &cobra.Command{
 			return fmt.Errorf("failed to verify pod template: %w", err)
 		}
 
+		// ---- Validate Spyre card Requirements ----
+
+		// calculate the required spyre cards
+		reqSpyreCardsCount, err := calculateReqSpyreCards(utils.ExtractMapKeys(tmpls), applicationPodTemplatesPath)
+		if err != nil {
+			return err
+		}
+
+		// calculate the actual available spyre cards
+
+		// TODO: calculate actual spyre cards count available (Assume it returns list of PCI Addresses)
+		// For now using the below dummy values to proceed
+		actualSpyreCardsCount := reqSpyreCardsCount
+		pciAddresses := []string{}
+		for i := range actualSpyreCardsCount {
+			pciAddresses = append(pciAddresses, fmt.Sprintf("%d", i+1))
+		}
+
+		// validate spyre card requirements
+		if err := validateSpyreCardRequirements(reqSpyreCardsCount, actualSpyreCardsCount); err != nil {
+			return err
+		}
+
+		// ---- ! ----
+
 		// podman connectivity
 		runtime, err := podman.NewPodmanClient()
 		if err != nil {
@@ -92,7 +123,7 @@ var createCmd = &cobra.Command{
 		// Loop through all pod templates, render and run kube play
 		cmd.Printf("Total Pod Templates to be processed: %d\n", len(tmpls))
 
-		if err := executePodTemplates(runtime, appName, appMetadata.PodTemplateExecutions, tmpls); err != nil {
+		if err := executePodTemplates(runtime, appName, appMetadata.PodTemplateExecutions, tmpls, applicationPodTemplatesPath, pciAddresses); err != nil {
 			return err
 		}
 
@@ -244,11 +275,14 @@ func verifyPodTemplateExists(tmpls map[string]*template.Template, appMetadata *h
 	return nil
 }
 
-func executePodTemplates(runtime runtime.Runtime, appName string, podTemplateExecutions [][]string, tmpls map[string]*template.Template) error {
-	fmt.Println("Templates: ", tmpls)
+func executePodTemplates(runtime runtime.Runtime, appName string, podTemplateExecutions [][]string,
+	tmpls map[string]*template.Template, podTemplatesPath string, pciAddresses []string) error {
 
-	params := map[string]any{
+	globalParams := map[string]any{
 		"AppName": appName,
+		// Key -> container name
+		// Value -> range of key-value env pairs
+		"env": map[string]map[string]string{},
 	}
 
 	// looping over each layer of podTemplateExecutions
@@ -264,6 +298,18 @@ func executePodTemplates(runtime runtime.Runtime, appName string, podTemplateExe
 			go func(t string) {
 				defer wg.Done()
 				fmt.Printf("Processing template: %s...\n", podTemplateName)
+
+				// Shallow Copy globalParams Map
+				params := utils.CopyMap(globalParams)
+
+				podTemplateFilePath := podTemplatesPath + "/" + podTemplateName
+
+				// get the env params for a given pod
+				env, err := returnEnvParamsForPod(podTemplateFilePath, &pciAddresses)
+				if err != nil {
+					errCh <- err
+				}
+				params["env"] = env
 
 				podTemplate := tmpls[podTemplateName]
 
@@ -343,4 +389,104 @@ func deployPodAndReadinessCheck(runtime runtime.Runtime, name string, body io.Re
 
 	fmt.Println("-------\n-------")
 	return nil
+}
+
+func validateSpyreCardRequirements(req int, actual int) error {
+	if actual < req {
+		return fmt.Errorf("insufficient spyre cards. Require: %d spyre cards to proceed", req)
+	}
+	return nil
+}
+
+func calculateReqSpyreCards(podTemplateFileNames []string, podTemplatesPath string) (int, error) {
+	totalReqSpyreCounts := 0
+
+	// Calculate Req Spyre Counts
+	for _, podTemplateFileName := range podTemplateFileNames {
+
+		podTemplateFilePath := podTemplatesPath + "/" + podTemplateFileName
+
+		// load the pod Template
+		podSpec, err := helpers.LoadPodTemplate(podTemplateFilePath)
+		if err != nil {
+			return totalReqSpyreCounts, fmt.Errorf("failed to load pod Template: %s with error: %w", podTemplateFilePath, err)
+		}
+
+		// fetch the spyreCount for all containers from the annotations
+		spyreCount, _, err := fetchSpyreCardsFromPodAnnotations(podSpec.Annotations)
+		if err != nil {
+			return totalReqSpyreCounts, err
+		}
+
+		totalReqSpyreCounts += spyreCount
+	}
+
+	return totalReqSpyreCounts, nil
+}
+
+func fetchSpyreCardsFromPodAnnotations(annotations map[string]string) (int, map[string]int, error) {
+	var spyreCards int
+	// spyreCardContainerMap: Key -> containerName, Value -> SpyreCardCounts
+	spyreCardContainerMap := map[string]int{}
+
+	isSpyreCardAnnotation := func(annotation string) (string, bool) {
+		matches := vars.SpyreCardAnnotationRegex.FindStringSubmatch(annotation)
+		if matches == nil {
+			return "", false
+		}
+		return matches[1], true
+	}
+
+	for annotationKey, val := range annotations {
+		if containerName, ok := isSpyreCardAnnotation(annotationKey); ok {
+			valInt, err := strconv.Atoi(val)
+			if err != nil {
+				return 0, spyreCardContainerMap, fmt.Errorf("failed to convert to int. Provided val: %s is not of int type", val)
+			}
+			// Replace with container name
+			spyreCardContainerMap[containerName] = valInt
+			spyreCards += valInt
+		}
+	}
+
+	return spyreCards, spyreCardContainerMap, nil
+}
+
+func returnEnvParamsForPod(podTemplateFilePath string, pciAddresses *[]string) (map[string]map[string]string, error) {
+	env := map[string]map[string]string{}
+	podSpec, err := helpers.LoadPodTemplate(podTemplateFilePath)
+	if err != nil {
+		return env, fmt.Errorf("failed to load pod Template: %s with error: %w", podTemplateFilePath, err)
+	}
+
+	podAnnotations := helpers.FetchPodAnnotations(*podSpec)
+	podContainerNames := helpers.FetchContainerNames(*podSpec)
+
+	// populate env with empty map
+	for _, containerName := range podContainerNames {
+		env[containerName] = map[string]string{}
+	}
+
+	// fetch the spyre cards and spyre card count required for each container in a pod
+	spyreCards, spyreCardContainerMap, err := fetchSpyreCardsFromPodAnnotations(podAnnotations)
+	if err != nil {
+		return env, err
+	}
+
+	if spyreCards == 0 {
+		// The pod doesnt require any spyre cards. // populate the given container with empty map
+		return env, nil
+	}
+
+	// Construct env for a given pod
+	// Since this is a critical section as both requires pciAddresses and modifies -> wrap it in mutex
+	envMutex.Lock()
+	for container, spyreCount := range spyreCardContainerMap {
+		if spyreCount != 0 {
+			env[container] = map[string]string{string(constants.PCIAddressKey): utils.JoinAndRemove(pciAddresses, spyreCount, " ")}
+		}
+	}
+	envMutex.Unlock()
+
+	return env, nil
 }

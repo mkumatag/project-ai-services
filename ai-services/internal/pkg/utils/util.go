@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"maps"
 	"strings"
 	"unicode"
 )
@@ -33,11 +34,44 @@ func BoolPtr(v bool) *bool {
 }
 
 // flattenArray takes a 2D slice and returns a 1D slice with all values
-func FlattenArray[T interface{ ~int | ~float64 | ~string }](arr [][]T) []T {
+func FlattenArray[T comparable](arr [][]T) []T {
 	flatArr := []T{}
 
 	for _, row := range arr {
 		flatArr = append(flatArr, row...)
 	}
 	return flatArr
+}
+
+// ExtractMapKeys returns a slice of map keys
+func ExtractMapKeys[K comparable, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// CopyMap - does a shallow copy of input map
+// Note -> this does a shallow copy works for only primitive types
+func CopyMap[K comparable, V any](src map[K]V) map[K]V {
+	dst := make(map[K]V, len(src))
+	maps.Copy(dst, src)
+	return dst
+}
+
+// JoinAndRemove joins the first `count` elements using `sep`,
+// returns the joined string, and removes those elements from the original slice.
+func JoinAndRemove(slice *[]string, count int, sep string) string {
+	if len(*slice) == 0 {
+		return ""
+	}
+	if count > len(*slice) {
+		count = len(*slice)
+	}
+
+	joinedStr := strings.Join((*slice)[:count], sep)
+	*slice = (*slice)[count:] // modify the original slice
+
+	return joinedStr
 }
