@@ -42,7 +42,7 @@ pipeline {
                 }
             }
         }
-        stage('Build and Push Etcd Image') {
+        stage('Build and push etcd image') {
             when {
                 changeset "images/etcd/**/*"
             }
@@ -52,13 +52,33 @@ pipeline {
                 }
             }
         }
-        stage('Build and push minio Image') {
+        stage('Build and push minio image') {
             when {
                 changeset "images/minio/**/*"
             }
             steps {
                 script {
                     pushImage('minio')
+                }
+            }
+        }
+        stage('Build and push rag-base image') {
+            when {
+                changeset "images/rag-base/**/*"
+            }
+            steps {
+                script {
+                    pushImage('rag-base')
+                }
+            }
+        }
+        stage('Build and push tools image') {
+            when {
+                changeset "images/tools/**/*"
+            }
+            steps {
+                script {
+                    pushImage('tools')
                 }
             }
         }
