@@ -24,7 +24,6 @@ var hiddenTemplates bool
 func init() {
 	ModelCmd.AddCommand(listCmd)
 	ModelCmd.AddCommand(downloadCmd)
-	hiddenTemplates, _ = ModelCmd.Flags().GetBool("hidden")
 }
 
 func models(template string) ([]string, error) {
