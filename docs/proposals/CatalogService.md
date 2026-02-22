@@ -1,20 +1,18 @@
-## Design Proposal: Catalog UI & Orchestration Service
+# Design Proposal: Catalog UI & Orchestration Service
 
 **Subject:** Secure Enterprise Interface for IBM AI Services
 
-**Target Platform:** RHEL LPAR(Standalone) / OpenShift(Clustered)
+**Target Platform:** RHEL LPAR (Standalone) / OpenShift (Clustered)
 
 **Status:** Draft / Proposal
 
 ---
 
-### 1. Executive Summary
+## 1. Executive Summary
 
 The **Catalog UI Service** provides a centralized, authenticated web portal for managing the lifecycle of AI applications. By providing a high-fidelity interface, the service empowers users to discover application templates, **deploy AI services with one click**, and monitor real-time logs through a stable REST façade. This architecture eliminates the need for manual CLI interaction, providing a secure, single-origin experience for the enterprise.
 
----
-
-### 2. Service Architecture
+## 2. Service Architecture
 
 The architecture is centered on the **Catalog UI** as the entry point, utilizing a specialized Go API Server to handle orchestration and security.
 
@@ -41,9 +39,7 @@ flowchart TD
     API --> Infrastructure
 ```
 
----
-
-### 3. Core Functional Capabilities
+## 3. Core Functional Capabilities
 
 The Catalog UI transforms manual workflows into automated, repeatable processes:
 
@@ -53,17 +49,17 @@ The Catalog UI transforms manual workflows into automated, repeatable processes:
 
 * **Lifecycle Observability**: Integrated real-time log streaming and status monitoring, providing immediate feedback on AI services health and resource utilization.
 
----
-
-### 4. Security Framework (Simple Auth)
+## 4. Security Framework (JWT Authentication)
 
 Security is managed at the Catalog UI Service level through a robust JWT-based authentication system.
 
-* **Authentication**: The UI captures credentials and exchanges them with the Go API for a JWT.
-* **JWT Middleware (The Gatekeeper)**:
-1. **Extracts** the token from the header on every request.
-2. **Verifies Signature** The server uses a locally stored Secret Key to recalculate the signature of the incoming header and payload. If it doesn't match the signature provided in the JWT, the request is rejected immediately.
-3. **Claims Validation**: Checks expiration (`exp`) and roles (e.g., admin vs. viewer) before triggering any orchestration logic.
+* **Authentication:** The UI captures user credentials and exchanges them with the Go API Server for a signed JWT.
+* **JWT Middleware (The Gatekeeper):**
+    1.  **Extraction:** Retrieves the Bearer token from the authorization header of every incoming request.
+    2.  **Signature Verification:** The server utilizes a locally stored **Secret Key** to validate the token's integrity. If the signature does not match the payload, the request is immediately rejected.
+    3.  **Claims Validation:** The middleware inspects expiration timestamps (`exp`) and RBAC roles (e.g., `admin` vs. `viewer`) before authorizing orchestration logic.
+
+> Note: Initially we will start with the admin role implementation and extend it to other roles in the future.
 
 ```mermaid
 flowchart TD
@@ -116,25 +112,29 @@ flowchart TD
     Verify -.->|Invalid| Fail[401 Unauthorized]
 ```
 
-Here is the proposed addition to your design document. I recommend adding this as a new section (Section 5) to clearly define the operational rollout of the service.
+To ensure strict feature and security parity, both the **Catalog UI** and the **CLI** operate as standard clients to the Go API Server, adhering to identical authentication and orchestration protocols.
 
----
+### CLI Login and Session Management
 
-Got it. Shifting from auto-detection to an explicit, user-defined runtime flag is a great design choice for CLI tools. It provides the administrator with deterministic control over the deployment target and avoids unexpected behavior in complex environments.
+1. **Authentication:** Users authenticate via the CLI:
+    ```bash
+    $ ai-services login --username <user> --password <pass>
+    ```
+2. **Token Retrieval:** The CLI routes the request to the `/api/login` endpoint of the Go API Server.
+3. **Secure Storage:** Upon success, the JWT is stored in a local configuration file (e.g., `~/.config/ai-services/config.json`) with restricted file permissions.
+4. **Session Persistence:** Subsequent commands automatically inject this token into the `Authorization` header. If the token expires, the CLI prompts the user for a fresh login.
 
-Here is the revised **Section 5** reflecting the explicit `--runtime` configuration.
+## 5. Service Bootstrapping
 
----
+To simplify Day 0 operations, administrators utilize a unified initialization command. This command uses a global flag to define the infrastructure context (Standalone vs. Clustered) before executing the bootstrap sequence.
 
-### 5. Service Bootstrapping
+### Management Plane Initialization
 
-To streamline the installation and operational readiness of the Catalog Service, administrators utilize a unified initialization command. This command uses a global flag to explicitly define the target infrastructure context before executing the bootstrap sequence.
-
-**Command:**
+The CLI provides dedicated commands to separate the setup of the management plane (UI + Backend) from the deployment of actual AI services (Day 1).
 
 ```bash
-$ ai-services catalog-service --runtime <podman|openshift> bootstrap
-
+# Day 0: Initializes the Catalog Service infrastructure on the specified runtime.
+$ ai-services catalog-service bootstrap --runtime <podman|openshift>
 ```
 
 **Execution Flow:**
@@ -169,3 +169,23 @@ flowchart TD
     Route -.->|Outputs Access URL| Admin
 
 ```
+
+## 6. Artifacts
+The Catalog Service is delivered as a set of portable, enterprise-grade artifacts designed to run identically across standalone RHEL hosts and clustered OpenShift environments.
+
+### 6.1 Container Images
+
+The solution is packaged into two primary container images. These are hosted in a enterprise registry (e.g., ICR) and pulled during the bootstrap phase.
+
+| Image Alias | Image Name | Base OS / Tech Stack | Role |
+| --- | --- | --- | --- |
+| **API Server** | `catalog-api:v1` | Red Hat UBI 9 (Minimal) / Go | Orchestration, Auth, & Infrastructure Interfacing |
+| **Catalog UI** | `catalog-ui:v1` | Red Hat UBI 9 (Nginx or Equivalent) / React | Carbon-based Web Portal & Asset Hosting |
+
+### 6.2 Deployment Specifications
+
+The `ai-services` CLI abstracts the underlying infrastructure by generating the necessary configuration manifests dynamically during the bootstrap process:
+
+**OpenShift:** Orchestration requires the deployment of standard Kubernetes manifests, including Deployments for pod management, Services for internal networking, and Routes for external UI exposure.
+
+**Podman:** Orchestration utilizes a simplified Pod deployment model, grouping the API and UI containers into a single unit on the RHEL host
