@@ -1,15 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
 import { HeaderGlobalAction } from '@carbon/react';
 import { Asleep, Light, Laptop } from '@carbon/icons-react';
+import type { CarbonIconType } from '@carbon/icons-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import styles from './ThemeSwitcher.module.scss';
+
+type ThemeValue = 'system' | 'light' | 'dark';
+
+interface ThemeOption {
+  value: ThemeValue;
+  label: string;
+  icon: CarbonIconType;
+}
 
 const ThemeSwitcher = () => {
   const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const themeOptions = [
+  const themeOptions: ThemeOption[] = [
     { value: 'system', label: 'System', icon: Laptop },
     { value: 'light', label: 'Light', icon: Light },
     { value: 'dark', label: 'Dark', icon: Asleep },
@@ -19,8 +28,8 @@ const ThemeSwitcher = () => {
   const CurrentIcon = currentThemeOption?.icon || Laptop;
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -34,7 +43,7 @@ const ThemeSwitcher = () => {
     };
   }, [isOpen]);
 
-  const handleThemeChange = (newTheme) => {
+  const handleThemeChange = (newTheme: ThemeValue) => {
     setTheme(newTheme);
     setIsOpen(false);
   };

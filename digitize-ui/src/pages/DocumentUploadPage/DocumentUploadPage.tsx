@@ -25,20 +25,20 @@ import styles from './DocumentUploadPage.module.scss';
 const DocumentUploadPage = () => {
   const navigate = useNavigate();
   const { effectiveTheme } = useTheme();
-  const [files, setFiles] = useState([]);
-  const [operation, setOperation] = useState('ingestion');
-  const [outputFormat, setOutputFormat] = useState('json');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [fileUploaderKey, setFileUploaderKey] = useState(0);
-  const [isFileListExpanded, setIsFileListExpanded] = useState(true);
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [jobId, setJobId] = useState(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [operation, setOperation] = useState<string>('ingestion');
+  const [outputFormat, setOutputFormat] = useState<string>('json');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<number>(0);
+  const [fileUploaderKey, setFileUploaderKey] = useState<number>(0);
+  const [isFileListExpanded, setIsFileListExpanded] = useState<boolean>(true);
+  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [jobId, setJobId] = useState<string | null>(null);
 
-  const handleFileChange = (event) => {
-    const selectedFiles = Array.from(event.target.files || []);
+  const handleFileChange = (event: any) => {
+    const selectedFiles = Array.from((event.target?.files || []) as FileList);
     setFiles(selectedFiles);
     setError(null);
     setSuccess(null);
@@ -47,9 +47,11 @@ const DocumentUploadPage = () => {
     }
   };
 
-  const handleOperationChange = (value) => {
-    setOperation(value);
-    setCurrentStep(1);
+  const handleOperationChange = (value: string | number | undefined) => {
+    if (value !== undefined) {
+      setOperation(String(value));
+      setCurrentStep(1);
+    }
   };
 
   const handleUpload = async () => {
@@ -75,7 +77,8 @@ const DocumentUploadPage = () => {
       setCurrentStep(3);
       setIsCompleted(true);
     } catch (err) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Upload failed';
+      const error = err as any;
+      const errorMessage = error.response?.data?.detail || error.message || 'Upload failed';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -191,13 +194,11 @@ const DocumentUploadPage = () => {
                       labelText="Ingestion"
                       value="ingestion"
                       id="operation-ingestion"
-                      helperText="Process documents and store in vector database for RAG applications"
                     />
                     <RadioButton
                       labelText="Digitization"
                       value="digitization"
                       id="operation-digitization"
-                      helperText="Convert documents to structured format (JSON, Markdown, or Text)"
                     />
                   </RadioButtonGroup>
                 </Tile>
@@ -215,26 +216,23 @@ const DocumentUploadPage = () => {
                       legendText=""
                       name="outputFormat"
                       valueSelected={outputFormat}
-                      onChange={(value) => setOutputFormat(value)}
+                      onChange={(value) => value !== undefined && setOutputFormat(String(value))}
                       orientation="horizontal"
                     >
                       <RadioButton
                         labelText="JSON"
                         value="json"
                         id="format-json"
-                        helperText="Structured data format"
                       />
                       <RadioButton
                         labelText="Markdown"
                         value="md"
                         id="format-md"
-                        helperText="Formatted text with markup"
                       />
                       <RadioButton
                         labelText="Text"
                         value="text"
                         id="format-text"
-                        helperText="Plain text output"
                       />
                     </RadioButtonGroup>
                   </Tile>

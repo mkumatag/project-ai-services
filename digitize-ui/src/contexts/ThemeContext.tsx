@@ -1,8 +1,17 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-const ThemeContext = createContext();
+type Theme = 'system' | 'light' | 'dark';
+type EffectiveTheme = 'white' | 'g100';
 
-export const useTheme = () => {
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  effectiveTheme: EffectiveTheme;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (!context) {
     throw new Error('useTheme must be used within a ThemeProvider');
@@ -10,21 +19,25 @@ export const useTheme = () => {
   return context;
 };
 
-export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => {
+interface ThemeProviderProps {
+  children: ReactNode;
+}
+
+export const ThemeProvider = ({ children }: ThemeProviderProps) => {
+  const [theme, setTheme] = useState<Theme>(() => {
     // Check localStorage first, default to 'system'
-    const savedTheme = localStorage.getItem('app-theme');
+    const savedTheme = localStorage.getItem('app-theme') as Theme | null;
     return savedTheme || 'system';
   });
 
-  const [effectiveTheme, setEffectiveTheme] = useState('white');
+  const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('white');
 
   useEffect(() => {
     // Save theme preference to localStorage
     localStorage.setItem('app-theme', theme);
 
     // Determine the effective theme
-    let newEffectiveTheme = theme;
+    let newEffectiveTheme: EffectiveTheme = theme as EffectiveTheme;
     
     if (theme === 'system') {
       // Check system preference
@@ -47,8 +60,8 @@ export const ThemeProvider = ({ children }) => {
     if (theme !== 'system') return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => {
-      const newEffectiveTheme = e.matches ? 'g100' : 'white';
+    const handleChange = (e: MediaQueryListEvent) => {
+      const newEffectiveTheme: EffectiveTheme = e.matches ? 'g100' : 'white';
       setEffectiveTheme(newEffectiveTheme);
       document.documentElement.setAttribute('data-carbon-theme', newEffectiveTheme);
     };
@@ -57,7 +70,7 @@ export const ThemeProvider = ({ children }) => {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
 
-  const value = {
+  const value: ThemeContextType = {
     theme,
     setTheme,
     effectiveTheme,

@@ -22,7 +22,7 @@ import {
 } from '@carbon/react';
 import { Renew, TrashCan, View } from '@carbon/icons-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { listDocuments, getDocumentContent, deleteDocument } from '../../services/api';
+import { listDocuments, getDocumentContent, deleteDocument, Document } from '../../services/api';
 import styles from './DocumentListPage.module.scss';
 
 const headers = [
@@ -33,7 +33,7 @@ const headers = [
   { key: 'actions', header: '' },
 ];
 
-const getStatusKind = (status) => {
+const getStatusKind = (status: string) => {
   switch (status) {
     case 'completed':
       return 'green';
@@ -48,17 +48,17 @@ const getStatusKind = (status) => {
 
 const DocumentListPage = () => {
   const { effectiveTheme } = useTheme();
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [totalItems, setTotalItems] = useState(0);
-  const [search, setSearch] = useState('');
-  const [selectedDoc, setSelectedDoc] = useState(null);
-  const [showContentModal, setShowContentModal] = useState(false);
-  const [docContent, setDocContent] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [docToDelete, setDocToDelete] = useState(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [totalItems, setTotalItems] = useState<number>(0);
+  const [search, setSearch] = useState<string>('');
+  const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
+  const [showContentModal, setShowContentModal] = useState<boolean>(false);
+  const [docContent, setDocContent] = useState<any>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [docToDelete, setDocToDelete] = useState<string | null>(null);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -84,7 +84,7 @@ const DocumentListPage = () => {
     fetchDocuments();
   }, [page, pageSize, search]);
 
-  const handleViewContent = async (docId) => {
+  const handleViewContent = async (docId: string) => {
     try {
       const content = await getDocumentContent(docId);
       setDocContent(content);
@@ -95,12 +95,13 @@ const DocumentListPage = () => {
     }
   };
 
-  const handleDeleteClick = (docId) => {
+  const handleDeleteClick = (docId: string) => {
     setDocToDelete(docId);
     setShowDeleteModal(true);
   };
 
   const handleDeleteConfirm = async () => {
+    if (!docToDelete) return;
     try {
       await deleteDocument(docToDelete);
       setShowDeleteModal(false);

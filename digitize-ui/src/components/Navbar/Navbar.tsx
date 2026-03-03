@@ -5,14 +5,19 @@ import { useRef, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import styles from './Navbar.module.scss';
 
-const Navbar = ({ isSideNavOpen, setIsSideNavOpen }) => {
-  const navRef = useRef(null);
+interface NavbarProps {
+  isSideNavOpen: boolean;
+  setIsSideNavOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+const Navbar = ({ isSideNavOpen, setIsSideNavOpen }: NavbarProps) => {
+  const navRef = useRef<HTMLElement>(null);
   const { effectiveTheme } = useTheme();
 
   useEffect(() => {
-    function handleOutsideClick(e) {
+    function handleOutsideClick(e: MouseEvent) {
       if (!isSideNavOpen || !setIsSideNavOpen) return;
-      const target = e.target;
+      const target = e.target as Node;
       if (navRef.current && navRef.current.contains(target)) return;
       setIsSideNavOpen(false);
     }

@@ -14,7 +14,12 @@ import { useTheme } from '../../contexts/ThemeContext';
 import ThemeSwitcher from '../ThemeSwitcher/ThemeSwitcher';
 import styles from './AppHeader.module.scss';
 
-const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }) => {
+interface AppHeaderProps {
+  isSideNavOpen: boolean;
+  setIsSideNavOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }: AppHeaderProps) => {
   const { effectiveTheme } = useTheme();
   const navigate = useNavigate();
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);

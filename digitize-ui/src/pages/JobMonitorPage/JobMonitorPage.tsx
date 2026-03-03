@@ -1,24 +1,28 @@
 import { useState, useEffect } from 'react';
+import { PageHeader } from '@carbon/ibm-products';
 import {
   DataTable,
-  TableContainer,
   Table,
   TableHead,
   TableRow,
   TableHeader,
   TableBody,
   TableCell,
+  TableContainer,
+  Pagination,
   Button,
   Tag,
-  Pagination,
-  Loading,
+  Grid,
+  Column,
   Modal,
   Search,
   Dropdown,
+  Theme,
 } from '@carbon/react';
 import { Renew } from '@carbon/icons-react';
-import { getAllJobs, getJobById } from '../services/api';
-import styles from './JobMonitor.module.scss';
+import { useTheme } from '../../contexts/ThemeContext';
+import { getAllJobs, getJobById, Job, Document } from '../../services/api';
+import styles from './JobMonitorPage.module.scss';
 
 const headers = [
   { key: 'job_id', header: 'Job ID' },
@@ -26,10 +30,10 @@ const headers = [
   { key: 'status', header: 'Status' },
   { key: 'documents', header: 'Documents' },
   { key: 'submitted_at', header: 'Submitted At' },
-  { key: 'actions', header: '' },
+  { key: 'actions', header: 'Actions' },
 ];
 
-const getStatusTagType = (status) => {
+const getStatusTagType = (status: string) => {
   switch (status) {
     case 'completed':
       return { type: 'green' };
@@ -44,7 +48,7 @@ const getStatusTagType = (status) => {
   }
 };
 
-const getOperationTagType = (operation) => {
+const getOperationTagType = (operation: string) => {
   switch (operation) {
     case 'ingestion':
       return { type: 'blue' };
@@ -55,7 +59,7 @@ const getOperationTagType = (operation) => {
   }
 };
 
-const getDocumentTagType = (status) => {
+const getDocumentTagType = (status: string) => {
   switch (status) {
     case 'completed':
       return { type: 'green' };
@@ -68,17 +72,18 @@ const getDocumentTagType = (status) => {
   }
 };
 
-const JobMonitor = ({ refreshTrigger }) => {
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [totalItems, setTotalItems] = useState(0);
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [operationFilter, setOperationFilter] = useState('all');
+const JobMonitorPage = () => {
+  const { effectiveTheme } = useTheme();
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [totalItems, setTotalItems] = useState<number>(0);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [searchValue, setSearchValue] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [operationFilter, setOperationFilter] = useState<string>('all');
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -103,13 +108,9 @@ const JobMonitor = ({ refreshTrigger }) => {
     // Auto-refresh every 10 seconds
     const interval = setInterval(fetchJobs, 10000);
     return () => clearInterval(interval);
-  }, [page, pageSize, refreshTrigger]);
+  }, [page, pageSize]);
 
-  const handleRefresh = () => {
-    fetchJobs();
-  };
-
-  const handleViewDetails = async (jobId) => {
+  const handleViewDetails = async (jobId: string) => {
     try {
       const jobDetails = await getJobById(jobId);
       setSelectedJob(jobDetails);
@@ -119,39 +120,17 @@ const JobMonitor = ({ refreshTrigger }) => {
     }
   };
 
-  const formatDocuments = (documents) => {
+  const formatDocuments = (documents: Document[] | undefined) => {
     if (!documents || documents.length === 0) return 'No documents';
     return (
       <div>
-        {documents.slice(0, 2).map((doc, idx) => (
+        {documents.map((doc, idx) => (
           <div key={idx} style={{ marginBottom: '4px' }}>
             <Tag {...getDocumentTagType(doc.status)} size="sm">
               {doc.name}
             </Tag>
           </div>
         ))}
-        {documents.length > 2 && (
-          <span style={{ fontSize: '0.75rem', color: '#525252' }}>
-            +{documents.length - 2} more
-          </span>
-        )}
-      </div>
-    );
-  };
-
-  const getStatusDisplay = (status) => {
-    const statusMap = {
-      'completed': { label: 'Completed', className: 'normal' },
-      'failed': { label: 'Failed', className: 'error' },
-      'in_progress': { label: 'In Progress', className: 'inProgress' },
-      'accepted': { label: 'Accepted', className: 'warning' },
-    };
-    const statusInfo = statusMap[status] || { label: status, className: 'normal' };
-    
-    return (
-      <div className={styles.statusIndicator}>
-        <span className={`${styles.dot} ${styles[statusInfo.className]}`}></span>
-        <span>{statusInfo.label}</span>
       </div>
     );
   };
@@ -176,7 +155,15 @@ const JobMonitor = ({ refreshTrigger }) => {
   const rows = filteredJobs.map((job) => ({
     id: job.job_id,
     job_id: (
-      <span className={styles.jobId}>
+      <span style={{
+        fontFamily: 'IBM Plex Mono, monospace',
+        fontSize: '0.875rem',
+        color: 'var(--cds-text-primary)',
+        padding: '0.25rem 0.5rem',
+        backgroundColor: 'var(--cds-layer-02)',
+        borderRadius: '4px',
+        display: 'inline-block'
+      }}>
         {job.job_id}
       </span>
     ),
@@ -185,7 +172,11 @@ const JobMonitor = ({ refreshTrigger }) => {
         {job.operation}
       </Tag>
     ),
-    status: getStatusDisplay(job.status),
+    status: (
+      <Tag {...getStatusTagType(job.status)} size="sm">
+        {job.status.replace('_', ' ')}
+      </Tag>
+    ),
     documents: formatDocuments(job.documents),
     submitted_at: job.submitted_at
       ? new Date(job.submitted_at).toLocaleString('en-US', {
@@ -198,7 +189,7 @@ const JobMonitor = ({ refreshTrigger }) => {
       : 'N/A',
     actions: (
       <Button
-        kind="ghost"
+        kind="tertiary"
         size="sm"
         onClick={() => handleViewDetails(job.job_id)}
       >
@@ -208,16 +199,22 @@ const JobMonitor = ({ refreshTrigger }) => {
   }));
 
   return (
-    <div className={styles.jobMonitor}>
-      <div className={styles.header}>
-        <h1>Jobs</h1>
-        
+    <Theme theme={effectiveTheme}>
+      <div className={styles.jobMonitorPage}>
+        <PageHeader
+          title={{ text: 'Job Monitor' }}
+          subtitle="Track the status of document processing jobs"
+        />
+
+      <div className={styles.content}>
+        {/* Toolbar with filters and search */}
         <div className={styles.toolbar}>
           <div className={styles.filterGroup}>
             <Dropdown
               id="operation-filter"
               titleText=""
               label="Operation"
+              size="lg"
               items={[
                 { id: 'all', text: 'All Operations' },
                 { id: 'ingestion', text: 'Ingestion' },
@@ -229,13 +226,14 @@ const JobMonitor = ({ refreshTrigger }) => {
                   ? { id: 'all', text: 'All Operations' }
                   : { id: operationFilter, text: operationFilter.charAt(0).toUpperCase() + operationFilter.slice(1) }
               }
-              onChange={({ selectedItem }) => setOperationFilter(selectedItem.id)}
+              onChange={({ selectedItem }) => selectedItem && setOperationFilter(selectedItem.id)}
             />
             
             <Dropdown
               id="status-filter"
               titleText=""
               label="Status"
+              size="lg"
               items={[
                 { id: 'all', text: 'All Status' },
                 { id: 'accepted', text: 'Accepted' },
@@ -249,7 +247,7 @@ const JobMonitor = ({ refreshTrigger }) => {
                   ? { id: 'all', text: 'All Status' }
                   : { id: statusFilter, text: statusFilter.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }
               }
-              onChange={({ selectedItem }) => setStatusFilter(selectedItem.id)}
+              onChange={({ selectedItem }) => selectedItem && setStatusFilter(selectedItem.id)}
             />
           </div>
 
@@ -272,73 +270,78 @@ const JobMonitor = ({ refreshTrigger }) => {
               renderIcon={Renew}
               hasIconOnly
               iconDescription="Refresh"
-              onClick={handleRefresh}
+              onClick={fetchJobs}
               disabled={loading}
             />
           </div>
         </div>
-      </div>
 
-      {loading ? (
-        <Loading description="Loading jobs..." />
-      ) : (
-        <div className={styles.tableWrapper}>
-          <DataTable rows={rows} headers={headers} size="lg">
-            {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <>
-                <TableContainer>
-                  <Table {...getTableProps()}>
-                    <TableHead>
-                      <TableRow>
-                        {headers.map((header) => (
-                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                            {header.header}
-                          </TableHeader>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {rows.length === 0 ? (
+        <Grid fullWidth>
+          <Column lg={16} md={8} sm={4}>
+            <DataTable rows={rows} headers={headers} size="lg">
+              {({
+                rows,
+                headers,
+                getHeaderProps,
+                getRowProps,
+                getTableProps,
+              }) => (
+                <>
+                  <TableContainer>
+                    <Table {...getTableProps()}>
+                      <TableHead>
                         <TableRow>
-                          <TableCell colSpan={headers.length}>
-                            <div className={styles.emptyState}>
-                              No jobs found. Upload documents to create jobs.
-                            </div>
-                          </TableCell>
+                          {headers.map((header) => {
+                            const { key, ...rest } = getHeaderProps({ header });
+                            return (
+                              <TableHeader key={key} {...rest}>
+                                {header.header}
+                              </TableHeader>
+                            );
+                          })}
                         </TableRow>
-                      ) : (
-                        rows.map((row) => (
-                          <TableRow {...getRowProps({ row })} key={row.id}>
-                            {row.cells.map((cell) => (
-                              <TableCell key={cell.id}>{cell.value}</TableCell>
-                            ))}
+                      </TableHead>
+                      <TableBody>
+                        {rows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={headers.length}>
+                              {loading ? 'Loading jobs...' : 'No jobs found. Upload documents to create jobs.'}
+                            </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                        ) : (
+                          rows.map((row) => {
+                            const { key: rowKey, ...rowProps } = getRowProps({ row });
+                            return (
+                              <TableRow key={rowKey} {...rowProps}>
+                                {row.cells.map((cell) => (
+                                  <TableCell key={cell.id}>{cell.value}</TableCell>
+                                ))}
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
 
-                {totalItems > pageSize && (
-                  <Pagination
-                    backwardText="Previous page"
-                    forwardText="Next page"
-                    itemsPerPageText="Items per page:"
-                    page={page}
-                    pageSize={pageSize}
-                    pageSizes={[25, 50, 100]}
-                    totalItems={totalItems}
-                    onChange={({ page, pageSize }) => {
-                      setPage(page);
-                      setPageSize(pageSize);
-                    }}
-                  />
-                )}
-              </>
-            )}
-          </DataTable>
-        </div>
-      )}
+                  {totalItems > pageSize && (
+                    <Pagination
+                      page={page}
+                      pageSize={pageSize}
+                      pageSizes={[5, 10, 20, 30]}
+                      totalItems={totalItems}
+                      onChange={({ page, pageSize }) => {
+                        setPage(page);
+                        setPageSize(pageSize);
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </DataTable>
+          </Column>
+        </Grid>
+      </div>
 
       {/* Job Details Modal */}
       <Modal
@@ -350,63 +353,67 @@ const JobMonitor = ({ refreshTrigger }) => {
         size="lg"
       >
         {selectedJob && (
-          <div className={styles.modalContent}>
-            <div className={styles.detailRow}>
-              <strong>Job ID:</strong>
-              <span className={styles.jobId}>{selectedJob.job_id}</span>
+          <div style={{ padding: '1rem' }}>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Job ID:</strong> {selectedJob.job_id}
             </div>
-            <div className={styles.detailRow}>
-              <strong>Operation:</strong>
-              <span>{selectedJob.operation}</span>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Operation:</strong> {selectedJob.operation}
             </div>
-            <div className={styles.detailRow}>
-              <strong>Status:</strong>
-              {getStatusDisplay(selectedJob.status)}
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Status:</strong>{' '}
+              <Tag {...getStatusTagType(selectedJob.status)} size="sm">
+                {selectedJob.status.replace('_', ' ')}
+              </Tag>
             </div>
-            <div className={styles.detailRow}>
-              <strong>Submitted At:</strong>
-              <span>
-                {selectedJob.submitted_at
-                  ? new Date(selectedJob.submitted_at).toLocaleString()
-                  : 'N/A'}
-              </span>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Submitted At:</strong>{' '}
+              {selectedJob.submitted_at
+                ? new Date(selectedJob.submitted_at).toLocaleString()
+                : 'N/A'}
             </div>
             {selectedJob.error && (
-              <div className={styles.errorMessage}>
+              <div style={{ marginBottom: '1rem', color: '#da1e28' }}>
                 <strong>Error:</strong> {selectedJob.error}
               </div>
             )}
-            <div className={styles.detailRow}>
+            <div style={{ marginBottom: '1rem' }}>
               <strong>Documents:</strong>
-              <div>
-                {selectedJob.documents && selectedJob.documents.length > 0 ? (
-                  <div>
-                    {selectedJob.documents.map((doc, idx) => (
-                      <div key={idx} className={styles.documentCard}>
-                        <div className={styles.documentDetail}>
-                          <strong>Name:</strong> {doc.name}
-                        </div>
-                        <div className={styles.documentDetail}>
-                          <strong>ID:</strong> {doc.id}
-                        </div>
-                        <div className={styles.documentDetail}>
-                          <strong>Status:</strong> {getStatusDisplay(doc.status)}
-                        </div>
+              {selectedJob.documents && selectedJob.documents.length > 0 ? (
+                <div style={{ marginTop: '0.5rem' }}>
+                  {selectedJob.documents.map((doc, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '0.5rem',
+                        marginBottom: '0.5rem',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      <div><strong>Name:</strong> {doc.name}</div>
+                      <div><strong>ID:</strong> {doc.id}</div>
+                      <div>
+                        <strong>Status:</strong>{' '}
+                        <Tag {...getDocumentTagType(doc.status)} size="sm">
+                          {doc.status}
+                        </Tag>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div>No documents</div>
-                )}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div>No documents</div>
+              )}
             </div>
           </div>
         )}
       </Modal>
-    </div>
+      </div>
+    </Theme>
   );
 };
 
-export default JobMonitor;
+export default JobMonitorPage;
 
 // Made with Bob
