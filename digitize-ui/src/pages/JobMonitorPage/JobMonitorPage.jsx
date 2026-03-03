@@ -17,8 +17,10 @@ import {
   Modal,
   Search,
   Dropdown,
+  Theme,
 } from '@carbon/react';
 import { Renew } from '@carbon/icons-react';
+import { useTheme } from '../../contexts/ThemeContext';
 import { getAllJobs, getJobById } from '../../services/api';
 import styles from './JobMonitorPage.module.scss';
 
@@ -71,6 +73,7 @@ const getDocumentTagType = (status) => {
 };
 
 const JobMonitorPage = () => {
+  const { effectiveTheme } = useTheme();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -196,11 +199,12 @@ const JobMonitorPage = () => {
   }));
 
   return (
-    <div className={styles.jobMonitorPage}>
-      <PageHeader
-        title={{ text: 'Job Monitor' }}
-        subtitle="Track the status of document processing jobs"
-      />
+    <Theme theme={effectiveTheme}>
+      <div className={styles.jobMonitorPage}>
+        <PageHeader
+          title={{ text: 'Job Monitor' }}
+          subtitle="Track the status of document processing jobs"
+        />
 
       <div className={styles.content}>
         {/* Toolbar with filters and search */}
@@ -405,7 +409,8 @@ const JobMonitorPage = () => {
           </div>
         )}
       </Modal>
-    </div>
+      </div>
+    </Theme>
   );
 };
 

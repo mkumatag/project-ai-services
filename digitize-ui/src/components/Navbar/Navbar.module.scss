@@ -5,9 +5,9 @@
 }
 
 .sideNavItem:active {
-  border-left: 5px solid #0f62fe;
+  border-left: 5px solid var(--cds-link-primary);
   outline: none !important;
-  background-color: #3a3b3b !important;
+  background-color: var(--cds-layer-selected-01) !important;
   color: unset;
   text-decoration: none;
 }
@@ -19,8 +19,8 @@
     bottom: 0;
     left: 0;
     z-index: 8000;
-    background-color: #ffffff;
-    border-right: 1px solid #e0e0e0;
+    background-color: var(--cds-layer-01);
+    border-right: 1px solid var(--cds-border-subtle-01);
   }
 
   .cds--side-nav:not(.cds--side-nav--expanded) {
@@ -33,21 +33,21 @@
   }
 
   .cds--side-nav__link {
-    color: #161616;
+    color: var(--cds-text-primary);
     
     &:hover {
-      background-color: #e8e8e8;
-      color: #161616;
+      background-color: var(--cds-layer-hover-01);
+      color: var(--cds-text-primary);
     }
 
     &.cds--side-nav__link--current {
-      background-color: #e0e0e0;
-      border-left: 3px solid #0f62fe;
+      background-color: var(--cds-layer-selected-01);
+      border-left: 3px solid var(--cds-link-primary);
     }
   }
 
   .cds--side-nav__icon {
-    fill: #161616;
+    fill: var(--cds-icon-primary);
   }
 }
 

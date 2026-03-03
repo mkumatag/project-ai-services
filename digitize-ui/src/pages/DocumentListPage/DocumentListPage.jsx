@@ -18,8 +18,10 @@ import {
   Grid,
   Column,
   Modal,
+  Theme,
 } from '@carbon/react';
 import { Renew, TrashCan, View } from '@carbon/icons-react';
+import { useTheme } from '../../contexts/ThemeContext';
 import { listDocuments, getDocumentContent, deleteDocument } from '../../services/api';
 import styles from './DocumentListPage.module.scss';
 
@@ -45,6 +47,7 @@ const getStatusKind = (status) => {
 };
 
 const DocumentListPage = () => {
+  const { effectiveTheme } = useTheme();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -143,11 +146,12 @@ const DocumentListPage = () => {
   const noSearchResults = documents.length === 0 && search;
 
   return (
-    <div className={styles.documentListPage}>
-      <PageHeader
-        title={{ text: 'Documents' }}
-        subtitle="View and manage processed documents"
-      />
+    <Theme theme={effectiveTheme}>
+      <div className={styles.documentListPage}>
+        <PageHeader
+          title={{ text: 'Documents' }}
+          subtitle="View and manage processed documents"
+        />
 
       <div className={styles.content}>
         <Grid fullWidth>
@@ -284,7 +288,8 @@ const DocumentListPage = () => {
       >
         <p>Are you sure you want to delete this document? This action cannot be undone.</p>
       </Modal>
-    </div>
+      </div>
+    </Theme>
   );
 };
 

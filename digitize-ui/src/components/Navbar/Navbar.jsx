@@ -2,10 +2,12 @@ import { Theme, SideNav, SideNavItems, SideNavLink } from '@carbon/react';
 import { Upload, Activity, Document } from '@carbon/icons-react';
 import { NavLink } from 'react-router-dom';
 import { useRef, useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 import styles from './Navbar.module.scss';
 
 const Navbar = ({ isSideNavOpen, setIsSideNavOpen }) => {
   const navRef = useRef(null);
+  const { effectiveTheme } = useTheme();
 
   useEffect(() => {
     function handleOutsideClick(e) {
@@ -20,7 +22,7 @@ const Navbar = ({ isSideNavOpen, setIsSideNavOpen }) => {
   }, [isSideNavOpen, setIsSideNavOpen]);
 
   return (
-    <Theme theme="white">
+    <Theme theme={effectiveTheme}>
       <SideNav
         aria-label="Side navigation"
         expanded={isSideNavOpen}

@@ -15,13 +15,16 @@ import {
   ProgressStep,
   Accordion,
   AccordionItem,
+  Theme,
 } from '@carbon/react';
 import { Upload, DocumentPdf, Close, Checkmark, Renew, View } from '@carbon/icons-react';
+import { useTheme } from '../../contexts/ThemeContext';
 import { uploadDocuments } from '../../services/api';
 import styles from './DocumentUploadPage.module.scss';
 
 const DocumentUploadPage = () => {
   const navigate = useNavigate();
+  const { effectiveTheme } = useTheme();
   const [files, setFiles] = useState([]);
   const [operation, setOperation] = useState('ingestion');
   const [outputFormat, setOutputFormat] = useState('json');
@@ -95,7 +98,7 @@ const DocumentUploadPage = () => {
   };
 
   return (
-    <>
+    <Theme theme={effectiveTheme}>
       <PageHeader
         title={{ text: 'Upload Documents' }}
         subtitle="Upload PDF documents for processing and digitization"
@@ -417,7 +420,7 @@ const DocumentUploadPage = () => {
           </div>
         </Column>
       </Grid>
-    </>
+    </Theme>
   );
 };
 

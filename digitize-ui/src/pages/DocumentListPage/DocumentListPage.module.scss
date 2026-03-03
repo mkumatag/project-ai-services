@@ -1,55 +1,55 @@
 .documentListPage {
-  background-color: #e8e8e8;
+  background-color: var(--cds-background);
   min-height: 100vh;
   padding: 0;
 
   :global {
     .cds--page-header {
-      background-color: #e8e8e8;
+      background-color: var(--cds-background);
       padding: 2rem 2rem 1rem 2rem;
     }
 
     // Table styling
     .cds--data-table-container {
-      background-color: #ffffff;
+      background-color: var(--cds-layer-01);
       padding: 0;
       border-radius: 0;
     }
 
     .cds--table-toolbar {
-      background-color: #f4f4f4;
+      background-color: var(--cds-layer-02);
       border-bottom: none;
       padding: 0.75rem 1rem;
     }
 
     .cds--data-table {
-      background-color: #ffffff;
+      background-color: var(--cds-layer-01);
 
       thead {
-        background-color: #e0e0e0;
+        background-color: var(--cds-layer-accent-01);
 
         th {
-          background-color: #e0e0e0;
-          color: #161616;
+          background-color: var(--cds-layer-accent-01);
+          color: var(--cds-text-primary);
           font-weight: 600;
           font-size: 0.875rem;
           padding: 1rem;
-          border-bottom: 1px solid #c6c6c6;
+          border-bottom: 1px solid var(--cds-border-subtle-01);
         }
       }
 
       tbody {
         tr {
-          border-bottom: 1px solid #e0e0e0;
-          background-color: #ffffff;
+          border-bottom: 1px solid var(--cds-border-subtle-01);
+          background-color: var(--cds-layer-01);
 
           &:hover {
-            background-color: #f4f4f4;
+            background-color: var(--cds-layer-hover-01);
           }
 
           td {
             padding: 1rem;
-            color: #161616;
+            color: var(--cds-text-primary);
             font-size: 0.875rem;
             vertical-align: middle;
             background-color: transparent;
@@ -59,13 +59,18 @@
     }
 
     .cds--pagination {
-      background-color: #f4f4f4;
+      background-color: var(--cds-layer-02);
       border-top: none;
       padding: 0.5rem 1rem;
     }
 
     .cds--search {
-      background-color: #ffffff;
+      background-color: var(--cds-field-01);
+    }
+    
+    .cds--search-input {
+      background-color: var(--cds-field-01);
+      color: var(--cds-text-primary);
     }
   }
 }
@@ -75,7 +80,7 @@
 }
 
 .tableContent {
-  background-color: #ffffff;
+  background-color: var(--cds-layer-01);
   border-radius: 0;
 }
 
@@ -93,13 +98,13 @@
   overflow: auto;
 
   pre {
-    background-color: #f4f4f4;
+    background-color: var(--cds-layer-02);
     padding: 1rem;
     border-radius: 4px;
     font-size: 0.875rem;
     white-space: pre-wrap;
     word-wrap: break-word;
-    color: #161616;
+    color: var(--cds-text-primary);
   }
 }
 
