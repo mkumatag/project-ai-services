@@ -1,6 +1,6 @@
 @use '@carbon/react/scss/themes';
 @use '@carbon/react/scss/theme' with (
-  $theme: themes.$g100
+  $theme: themes.$white
 );
 @use '@carbon/react';
 
@@ -8,11 +8,12 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+  background-color: #e8e8e8;
 }
 
 .cds--content {
-  padding: 2rem;
-  background-color: var(--cds-background);
+  padding: 0;
+  background-color: #e8e8e8;
   min-height: calc(100vh - 3rem);
 }
 

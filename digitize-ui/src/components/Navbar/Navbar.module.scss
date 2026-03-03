@@ -12,4 +12,43 @@
   text-decoration: none;
 }
 
+:global {
+  .cds--side-nav {
+    position: fixed !important;
+    top: 3rem;
+    bottom: 0;
+    left: 0;
+    z-index: 8000;
+    background-color: #ffffff;
+    border-right: 1px solid #e0e0e0;
+  }
+
+  .cds--side-nav:not(.cds--side-nav--expanded) {
+    width: 3rem !important;
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .cds--side-nav--expanded {
+    width: 16rem !important;
+  }
+
+  .cds--side-nav__link {
+    color: #161616;
+    
+    &:hover {
+      background-color: #e8e8e8;
+      color: #161616;
+    }
+
+    &.cds--side-nav__link--current {
+      background-color: #e0e0e0;
+      border-left: 3px solid #0f62fe;
+    }
+  }
+
+  .cds--side-nav__icon {
+    fill: #161616;
+  }
+}
+
 // Made with Bob

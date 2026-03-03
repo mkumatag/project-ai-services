@@ -1,18 +1,24 @@
 @use '@carbon/react/scss/themes';
 @use '@carbon/react/scss/theme' with (
-  $theme: themes.$g100
+  $theme: themes.$white
 );
 @use '@carbon/react';
 
 html,
 body {
   margin: 0;
+  background-color: #e8e8e8;
 }
 
 .appLayout {
   min-height: 100vh;
-  background-color: var(--cds-background);
+  background-color: #e8e8e8;
   padding-top: 3rem;
+  padding-left: 3rem; // Space for collapsed sidebar
+  
+  main {
+    transition: margin-left 0.11s cubic-bezier(0.2, 0, 1, 0.9);
+  }
 }
 
 @media (min-width: 42rem) {

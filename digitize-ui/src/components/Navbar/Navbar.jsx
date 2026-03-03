@@ -1,4 +1,5 @@
-import { Theme, SideNav, SideNavItems, SideNavMenuItem } from '@carbon/react';
+import { Theme, SideNav, SideNavItems, SideNavLink } from '@carbon/react';
+import { Upload, Activity, Document } from '@carbon/icons-react';
 import { NavLink } from 'react-router-dom';
 import { useRef, useEffect } from 'react';
 import styles from './Navbar.module.scss';
@@ -19,37 +20,41 @@ const Navbar = ({ isSideNavOpen, setIsSideNavOpen }) => {
   }, [isSideNavOpen, setIsSideNavOpen]);
 
   return (
-    <Theme theme="g100">
+    <Theme theme="white">
       <SideNav
         aria-label="Side navigation"
         expanded={isSideNavOpen}
-        isPersistent={false}
+        isFixedNav
+        isChildOfHeader={false}
         ref={navRef}
       >
         <SideNavItems>
-          <SideNavMenuItem
+          <SideNavLink
+            renderIcon={Upload}
             as={NavLink}
             to="/upload"
             className={styles.sideNavItem}
           >
             Upload Documents
-          </SideNavMenuItem>
+          </SideNavLink>
 
-          <SideNavMenuItem
+          <SideNavLink
+            renderIcon={Activity}
             as={NavLink}
             to="/jobs"
             className={styles.sideNavItem}
           >
             Job Monitor
-          </SideNavMenuItem>
+          </SideNavLink>
 
-          <SideNavMenuItem
+          <SideNavLink
+            renderIcon={Document}
             as={NavLink}
             to="/documents"
             className={styles.sideNavItem}
           >
             Documents
-          </SideNavMenuItem>
+          </SideNavLink>
         </SideNavItems>
       </SideNav>
     </Theme>

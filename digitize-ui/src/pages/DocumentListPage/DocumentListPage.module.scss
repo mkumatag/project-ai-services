@@ -1,7 +1,82 @@
+.documentListPage {
+  background-color: #e8e8e8;
+  min-height: 100vh;
+  padding: 0;
+
+  :global {
+    .cds--page-header {
+      background-color: #e8e8e8;
+      padding: 2rem 2rem 1rem 2rem;
+    }
+
+    // Table styling
+    .cds--data-table-container {
+      background-color: #ffffff;
+      padding: 0;
+      border-radius: 0;
+    }
+
+    .cds--table-toolbar {
+      background-color: #f4f4f4;
+      border-bottom: none;
+      padding: 0.75rem 1rem;
+    }
+
+    .cds--data-table {
+      background-color: #ffffff;
+
+      thead {
+        background-color: #e0e0e0;
+
+        th {
+          background-color: #e0e0e0;
+          color: #161616;
+          font-weight: 600;
+          font-size: 0.875rem;
+          padding: 1rem;
+          border-bottom: 1px solid #c6c6c6;
+        }
+      }
+
+      tbody {
+        tr {
+          border-bottom: 1px solid #e0e0e0;
+          background-color: #ffffff;
+
+          &:hover {
+            background-color: #f4f4f4;
+          }
+
+          td {
+            padding: 1rem;
+            color: #161616;
+            font-size: 0.875rem;
+            vertical-align: middle;
+            background-color: transparent;
+          }
+        }
+      }
+    }
+
+    .cds--pagination {
+      background-color: #f4f4f4;
+      border-top: none;
+      padding: 0.5rem 1rem;
+    }
+
+    .cds--search {
+      background-color: #ffffff;
+    }
+  }
+}
+
+.content {
+  padding: 0 2rem 2rem 2rem;
+}
+
 .tableContent {
-  padding: 2rem;
-  background-color: var(--cds-layer-01);
-  min-height: calc(100vh - 12rem);
+  background-color: #ffffff;
+  border-radius: 0;
 }
 
 .rowActions {
@@ -18,13 +93,13 @@
   overflow: auto;
 
   pre {
-    background-color: var(--cds-layer-02);
+    background-color: #f4f4f4;
     padding: 1rem;
     border-radius: 4px;
     font-size: 0.875rem;
     white-space: pre-wrap;
     word-wrap: break-word;
-    color: var(--cds-text-primary);
+    color: #161616;
   }
 }
 

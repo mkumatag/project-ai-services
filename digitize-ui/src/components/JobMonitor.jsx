@@ -13,9 +13,12 @@ import {
   Pagination,
   Loading,
   Modal,
+  Search,
+  Dropdown,
 } from '@carbon/react';
 import { Renew } from '@carbon/icons-react';
 import { getAllJobs, getJobById } from '../services/api';
+import styles from './JobMonitor.module.scss';
 
 const headers = [
   { key: 'job_id', header: 'Job ID' },
@@ -23,7 +26,7 @@ const headers = [
   { key: 'status', header: 'Status' },
   { key: 'documents', header: 'Documents' },
   { key: 'submitted_at', header: 'Submitted At' },
-  { key: 'actions', header: 'Actions' },
+  { key: 'actions', header: '' },
 ];
 
 const getStatusTagType = (status) => {
@@ -69,10 +72,13 @@ const JobMonitor = ({ refreshTrigger }) => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
   const [selectedJob, setSelectedJob] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [operationFilter, setOperationFilter] = useState('all');
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -133,18 +139,44 @@ const JobMonitor = ({ refreshTrigger }) => {
     );
   };
 
-  const rows = jobs.map((job) => ({
+  const getStatusDisplay = (status) => {
+    const statusMap = {
+      'completed': { label: 'Completed', className: 'normal' },
+      'failed': { label: 'Failed', className: 'error' },
+      'in_progress': { label: 'In Progress', className: 'inProgress' },
+      'accepted': { label: 'Accepted', className: 'warning' },
+    };
+    const statusInfo = statusMap[status] || { label: status, className: 'normal' };
+    
+    return (
+      <div className={styles.statusIndicator}>
+        <span className={`${styles.dot} ${styles[statusInfo.className]}`}></span>
+        <span>{statusInfo.label}</span>
+      </div>
+    );
+  };
+
+  // Filter jobs based on search, operation, and status
+  const filteredJobs = jobs.filter((job) => {
+    // Search filter
+    const matchesSearch = searchValue === '' ||
+      job.job_id?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      job.operation?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      job.documents?.some(doc => doc.name?.toLowerCase().includes(searchValue.toLowerCase()));
+
+    // Operation filter
+    const matchesOperation = operationFilter === 'all' || job.operation === operationFilter;
+
+    // Status filter
+    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+
+    return matchesSearch && matchesOperation && matchesStatus;
+  });
+
+  const rows = filteredJobs.map((job) => ({
     id: job.job_id,
     job_id: (
-      <span style={{
-        fontFamily: 'IBM Plex Mono, monospace',
-        fontSize: '0.875rem',
-        color: 'var(--cds-text-primary)',
-        padding: '0.25rem 0.5rem',
-        backgroundColor: 'var(--cds-layer-02)',
-        borderRadius: '4px',
-        display: 'inline-block'
-      }}>
+      <span className={styles.jobId}>
         {job.job_id}
       </span>
     ),
@@ -153,11 +185,7 @@ const JobMonitor = ({ refreshTrigger }) => {
         {job.operation}
       </Tag>
     ),
-    status: (
-      <Tag {...getStatusTagType(job.status)} size="sm">
-        {job.status.replace('_', ' ')}
-      </Tag>
-    ),
+    status: getStatusDisplay(job.status),
     documents: formatDocuments(job.documents),
     submitted_at: job.submitted_at
       ? new Date(job.submitted_at).toLocaleString('en-US', {
@@ -180,75 +208,136 @@ const JobMonitor = ({ refreshTrigger }) => {
   }));
 
   return (
-    <div className="job-monitor">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h3>Job Monitor</h3>
-        <Button
-          renderIcon={Renew}
-          kind="tertiary"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={loading}
-        >
-          Refresh
-        </Button>
+    <div className={styles.jobMonitor}>
+      <div className={styles.header}>
+        <h1>Jobs</h1>
+        
+        <div className={styles.toolbar}>
+          <div className={styles.filterGroup}>
+            <Dropdown
+              id="operation-filter"
+              titleText=""
+              label="Operation"
+              items={[
+                { id: 'all', text: 'All Operations' },
+                { id: 'ingestion', text: 'Ingestion' },
+                { id: 'digitization', text: 'Digitization' },
+              ]}
+              itemToString={(item) => (item ? item.text : '')}
+              selectedItem={
+                operationFilter === 'all'
+                  ? { id: 'all', text: 'All Operations' }
+                  : { id: operationFilter, text: operationFilter.charAt(0).toUpperCase() + operationFilter.slice(1) }
+              }
+              onChange={({ selectedItem }) => setOperationFilter(selectedItem.id)}
+            />
+            
+            <Dropdown
+              id="status-filter"
+              titleText=""
+              label="Status"
+              items={[
+                { id: 'all', text: 'All Status' },
+                { id: 'accepted', text: 'Accepted' },
+                { id: 'in_progress', text: 'In Progress' },
+                { id: 'completed', text: 'Completed' },
+                { id: 'failed', text: 'Failed' },
+              ]}
+              itemToString={(item) => (item ? item.text : '')}
+              selectedItem={
+                statusFilter === 'all'
+                  ? { id: 'all', text: 'All Status' }
+                  : { id: statusFilter, text: statusFilter.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }
+              }
+              onChange={({ selectedItem }) => setStatusFilter(selectedItem.id)}
+            />
+          </div>
+
+          <div className={styles.searchWrapper}>
+            <Search
+              size="lg"
+              placeholder="Search"
+              labelText="Search"
+              closeButtonLabelText="Clear search input"
+              id="search-jobs"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+            />
+          </div>
+
+          <div className={styles.actions}>
+            <Button
+              kind="primary"
+              size="lg"
+              renderIcon={Renew}
+              hasIconOnly
+              iconDescription="Refresh"
+              onClick={handleRefresh}
+              disabled={loading}
+            />
+          </div>
+        </div>
       </div>
 
       {loading ? (
         <Loading description="Loading jobs..." />
       ) : (
-        <>
-          <DataTable rows={rows} headers={headers}>
+        <div className={styles.tableWrapper}>
+          <DataTable rows={rows} headers={headers} size="lg">
             {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer>
-                <Table {...getTableProps()}>
-                  <TableHead>
-                    <TableRow>
-                      {headers.map((header) => (
-                        <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                          {header.header}
-                        </TableHeader>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.length === 0 ? (
+              <>
+                <TableContainer>
+                  <Table {...getTableProps()}>
+                    <TableHead>
                       <TableRow>
-                        <TableCell colSpan={headers.length}>
-                          No jobs found. Upload documents to create jobs.
-                        </TableCell>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
                       </TableRow>
-                    ) : (
-                      rows.map((row) => (
-                        <TableRow {...getRowProps({ row })} key={row.id}>
-                          {row.cells.map((cell) => (
-                            <TableCell key={cell.id}>{cell.value}</TableCell>
-                          ))}
+                    </TableHead>
+                    <TableBody>
+                      {rows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={headers.length}>
+                            <div className={styles.emptyState}>
+                              No jobs found. Upload documents to create jobs.
+                            </div>
+                          </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                      ) : (
+                        rows.map((row) => (
+                          <TableRow {...getRowProps({ row })} key={row.id}>
+                            {row.cells.map((cell) => (
+                              <TableCell key={cell.id}>{cell.value}</TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {totalItems > pageSize && (
+                  <Pagination
+                    backwardText="Previous page"
+                    forwardText="Next page"
+                    itemsPerPageText="Items per page:"
+                    page={page}
+                    pageSize={pageSize}
+                    pageSizes={[25, 50, 100]}
+                    totalItems={totalItems}
+                    onChange={({ page, pageSize }) => {
+                      setPage(page);
+                      setPageSize(pageSize);
+                    }}
+                  />
+                )}
+              </>
             )}
           </DataTable>
-
-          {totalItems > pageSize && (
-            <Pagination
-              backwardText="Previous page"
-              forwardText="Next page"
-              itemsPerPageText="Items per page:"
-              page={page}
-              pageSize={pageSize}
-              pageSizes={[10, 20, 30, 40, 50]}
-              totalItems={totalItems}
-              onChange={({ page, pageSize }) => {
-                setPage(page);
-                setPageSize(pageSize);
-              }}
-            />
-          )}
-        </>
+        </div>
       )}
 
       {/* Job Details Modal */}
@@ -261,58 +350,55 @@ const JobMonitor = ({ refreshTrigger }) => {
         size="lg"
       >
         {selectedJob && (
-          <div style={{ padding: '1rem' }}>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Job ID:</strong> {selectedJob.job_id}
+          <div className={styles.modalContent}>
+            <div className={styles.detailRow}>
+              <strong>Job ID:</strong>
+              <span className={styles.jobId}>{selectedJob.job_id}</span>
             </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Operation:</strong> {selectedJob.operation}
+            <div className={styles.detailRow}>
+              <strong>Operation:</strong>
+              <span>{selectedJob.operation}</span>
             </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Status:</strong>{' '}
-              <Tag {...getStatusTagType(selectedJob.status)} size="sm">
-                {selectedJob.status.replace('_', ' ')}
-              </Tag>
+            <div className={styles.detailRow}>
+              <strong>Status:</strong>
+              {getStatusDisplay(selectedJob.status)}
             </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Submitted At:</strong>{' '}
-              {selectedJob.submitted_at
-                ? new Date(selectedJob.submitted_at).toLocaleString()
-                : 'N/A'}
+            <div className={styles.detailRow}>
+              <strong>Submitted At:</strong>
+              <span>
+                {selectedJob.submitted_at
+                  ? new Date(selectedJob.submitted_at).toLocaleString()
+                  : 'N/A'}
+              </span>
             </div>
             {selectedJob.error && (
-              <div style={{ marginBottom: '1rem', color: '#da1e28' }}>
+              <div className={styles.errorMessage}>
                 <strong>Error:</strong> {selectedJob.error}
               </div>
             )}
-            <div style={{ marginBottom: '1rem' }}>
+            <div className={styles.detailRow}>
               <strong>Documents:</strong>
-              {selectedJob.documents && selectedJob.documents.length > 0 ? (
-                <div style={{ marginTop: '0.5rem' }}>
-                  {selectedJob.documents.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '0.5rem',
-                        marginBottom: '0.5rem',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      <div><strong>Name:</strong> {doc.name}</div>
-                      <div><strong>ID:</strong> {doc.id}</div>
-                      <div>
-                        <strong>Status:</strong>{' '}
-                        <Tag {...getDocumentTagType(doc.status)} size="sm">
-                          {doc.status}
-                        </Tag>
+              <div>
+                {selectedJob.documents && selectedJob.documents.length > 0 ? (
+                  <div>
+                    {selectedJob.documents.map((doc, idx) => (
+                      <div key={idx} className={styles.documentCard}>
+                        <div className={styles.documentDetail}>
+                          <strong>Name:</strong> {doc.name}
+                        </div>
+                        <div className={styles.documentDetail}>
+                          <strong>ID:</strong> {doc.id}
+                        </div>
+                        <div className={styles.documentDetail}>
+                          <strong>Status:</strong> {getStatusDisplay(doc.status)}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div>No documents</div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div>No documents</div>
+                )}
+              </div>
             </div>
           </div>
         )}

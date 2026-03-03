@@ -6,7 +6,7 @@ import {
   HeaderMenuButton,
   Theme,
 } from '@carbon/react';
-import { Help, Notification } from '@carbon/icons-react';
+import { Help } from '@carbon/icons-react';
 import styles from './AppHeader.module.scss';
 
 const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }) => {
@@ -29,13 +29,6 @@ const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }) => {
         <HeaderGlobalBar>
           <HeaderGlobalAction aria-label="Help" className={styles.iconWidth}>
             <Help size={20} />
-          </HeaderGlobalAction>
-
-          <HeaderGlobalAction
-            aria-label="Notifications"
-            className={styles.iconWidth}
-          >
-            <Notification size={20} />
           </HeaderGlobalAction>
         </HeaderGlobalBar>
       </Header>

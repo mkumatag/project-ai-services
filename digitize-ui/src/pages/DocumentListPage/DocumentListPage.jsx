@@ -143,15 +143,16 @@ const DocumentListPage = () => {
   const noSearchResults = documents.length === 0 && search;
 
   return (
-    <>
+    <div className={styles.documentListPage}>
       <PageHeader
         title={{ text: 'Documents' }}
         subtitle="View and manage processed documents"
       />
 
-      <Grid fullWidth>
-        <Column lg={16} md={8} sm={4}>
-          <div className={styles.tableContent}>
+      <div className={styles.content}>
+        <Grid fullWidth>
+          <Column lg={16} md={8} sm={4}>
+            <div className={styles.tableContent}>
             <DataTable rows={rows} headers={headers} size="lg">
               {({
                 rows,
@@ -249,9 +250,10 @@ const DocumentListPage = () => {
                 </>
               )}
             </DataTable>
-          </div>
-        </Column>
-      </Grid>
+            </div>
+          </Column>
+        </Grid>
+      </div>
 
       {/* Content Modal */}
       <Modal
@@ -282,7 +284,7 @@ const DocumentListPage = () => {
       >
         <p>Are you sure you want to delete this document? This action cannot be undone.</p>
       </Modal>
-    </>
+    </div>
   );
 };
 

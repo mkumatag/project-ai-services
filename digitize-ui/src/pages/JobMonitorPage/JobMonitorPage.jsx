@@ -9,14 +9,14 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableToolbar,
-  TableToolbarContent,
   Pagination,
   Button,
   Tag,
   Grid,
   Column,
   Modal,
+  Search,
+  Dropdown,
 } from '@carbon/react';
 import { Renew } from '@carbon/icons-react';
 import { getAllJobs, getJobById } from '../../services/api';
@@ -74,10 +74,13 @@ const JobMonitorPage = () => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
   const [selectedJob, setSelectedJob] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [operationFilter, setOperationFilter] = useState('all');
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -129,7 +132,24 @@ const JobMonitorPage = () => {
     );
   };
 
-  const rows = jobs.map((job) => ({
+  // Filter jobs based on search, operation, and status
+  const filteredJobs = jobs.filter((job) => {
+    // Search filter
+    const matchesSearch = searchValue === '' ||
+      job.job_id?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      job.operation?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      job.documents?.some(doc => doc.name?.toLowerCase().includes(searchValue.toLowerCase()));
+
+    // Operation filter
+    const matchesOperation = operationFilter === 'all' || job.operation === operationFilter;
+
+    // Status filter
+    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+
+    return matchesSearch && matchesOperation && matchesStatus;
+  });
+
+  const rows = filteredJobs.map((job) => ({
     id: job.job_id,
     job_id: (
       <span style={{
@@ -176,15 +196,84 @@ const JobMonitorPage = () => {
   }));
 
   return (
-    <>
+    <div className={styles.jobMonitorPage}>
       <PageHeader
         title={{ text: 'Job Monitor' }}
         subtitle="Track the status of document processing jobs"
       />
 
-      <Grid fullWidth>
-        <Column lg={16} md={8} sm={4}>
-          <div className={styles.tableContent}>
+      <div className={styles.content}>
+        {/* Toolbar with filters and search */}
+        <div className={styles.toolbar}>
+          <div className={styles.filterGroup}>
+            <Dropdown
+              id="operation-filter"
+              titleText=""
+              label="Operation"
+              size="lg"
+              items={[
+                { id: 'all', text: 'All Operations' },
+                { id: 'ingestion', text: 'Ingestion' },
+                { id: 'digitization', text: 'Digitization' },
+              ]}
+              itemToString={(item) => (item ? item.text : '')}
+              selectedItem={
+                operationFilter === 'all'
+                  ? { id: 'all', text: 'All Operations' }
+                  : { id: operationFilter, text: operationFilter.charAt(0).toUpperCase() + operationFilter.slice(1) }
+              }
+              onChange={({ selectedItem }) => setOperationFilter(selectedItem.id)}
+            />
+            
+            <Dropdown
+              id="status-filter"
+              titleText=""
+              label="Status"
+              size="lg"
+              items={[
+                { id: 'all', text: 'All Status' },
+                { id: 'accepted', text: 'Accepted' },
+                { id: 'in_progress', text: 'In Progress' },
+                { id: 'completed', text: 'Completed' },
+                { id: 'failed', text: 'Failed' },
+              ]}
+              itemToString={(item) => (item ? item.text : '')}
+              selectedItem={
+                statusFilter === 'all'
+                  ? { id: 'all', text: 'All Status' }
+                  : { id: statusFilter, text: statusFilter.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }
+              }
+              onChange={({ selectedItem }) => setStatusFilter(selectedItem.id)}
+            />
+          </div>
+
+          <div className={styles.searchWrapper}>
+            <Search
+              size="lg"
+              placeholder="Search"
+              labelText="Search"
+              closeButtonLabelText="Clear search input"
+              id="search-jobs"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+            />
+          </div>
+
+          <div className={styles.actions}>
+            <Button
+              kind="primary"
+              size="lg"
+              renderIcon={Renew}
+              hasIconOnly
+              iconDescription="Refresh"
+              onClick={fetchJobs}
+              disabled={loading}
+            />
+          </div>
+        </div>
+
+        <Grid fullWidth>
+          <Column lg={16} md={8} sm={4}>
             <DataTable rows={rows} headers={headers} size="lg">
               {({
                 rows,
@@ -195,19 +284,6 @@ const JobMonitorPage = () => {
               }) => (
                 <>
                   <TableContainer>
-                    <TableToolbar>
-                      <TableToolbarContent>
-                        <Button
-                          hasIconOnly
-                          kind="ghost"
-                          renderIcon={Renew}
-                          iconDescription="Refresh"
-                          size="lg"
-                          onClick={fetchJobs}
-                          disabled={loading}
-                        />
-                      </TableToolbarContent>
-                    </TableToolbar>
                     <Table {...getTableProps()}>
                       <TableHead>
                         <TableRow>
@@ -259,9 +335,9 @@ const JobMonitorPage = () => {
                 </>
               )}
             </DataTable>
-          </div>
-        </Column>
-      </Grid>
+          </Column>
+        </Grid>
+      </div>
 
       {/* Job Details Modal */}
       <Modal
@@ -329,7 +405,7 @@ const JobMonitorPage = () => {
           </div>
         )}
       </Modal>
-    </>
+    </div>
   );
 };
 
