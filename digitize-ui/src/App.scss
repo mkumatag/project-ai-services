@@ -1,0 +1,106 @@
+@use '@carbon/react/scss/themes';
+@use '@carbon/react/scss/theme' with (
+  $theme: themes.$g100
+);
+@use '@carbon/react';
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.cds--content {
+  padding: 2rem;
+  background-color: var(--cds-background);
+  min-height: calc(100vh - 3rem);
+}
+
+.home-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.document-upload,
+.job-monitor,
+.document-list {
+  margin-top: 2rem;
+}
+
+.document-upload h3,
+.job-monitor h3,
+.document-list h3 {
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Custom styles for better spacing */
+.cds--tabs {
+  margin-bottom: 2rem;
+}
+
+.cds--tab-content {
+  padding: 1.5rem 0;
+}
+
+/* File uploader customization */
+.cds--file__container {
+  margin-bottom: 1rem;
+}
+
+/* Table customization */
+.cds--data-table-container {
+  margin-top: 1rem;
+}
+
+/* Modal content styling */
+.cds--modal-content pre {
+  background-color: var(--cds-layer-01);
+  padding: 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+/* Loading state */
+.cds--loading {
+  margin: 2rem 0;
+}
+
+/* Notification styling */
+.cds--inline-notification {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Button spacing */
+.cds--btn + .cds--btn {
+  margin-left: 0.5rem;
+}
+
+/* Search bar */
+.cds--search {
+  max-width: 400px;
+}
+
+/* Pagination */
+.cds--pagination {
+  margin-top: 1rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .cds--content {
+    padding: 1rem;
+  }
+
+  .home-page {
+    padding: 0;
+  }
+
+  .cds--search {
+    max-width: 100%;
+  }
+}
+
+// Made with Bob
