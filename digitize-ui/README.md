@@ -28,20 +28,41 @@ npm install
 
 ## Configuration
 
-The application is configured to proxy API requests to `http://localhost:4000` by default. You can modify this in `vite.config.js` if your backend is running on a different host/port.
+The application uses environment variables for configuration.
 
-```javascript
-// vite.config.js
-server: {
-  port: 3000,
-  proxy: {
-    '/v1': {
-      target: 'http://localhost:4000',  // Change this to your backend URL
-      changeOrigin: true,
-    }
-  }
-}
+### Quick Setup
+
+1. Copy the example environment file:
+```bash
+cp .env.example .env.local
 ```
+
+2. Edit `.env.local` to configure your API target:
+```env
+VITE_API_TARGET=http://localhost:4000
+VITE_PORT=3000
+```
+
+### Available Configuration Options
+
+- **VITE_API_TARGET**: Backend API URL (default: `http://localhost:4000`)
+- **VITE_PORT**: Development server port (default: `3000`)
+
+For detailed configuration instructions, see [.env.README.md](.env.README.md).
+
+### Examples
+
+**Local backend (default):**
+```env
+VITE_API_TARGET=http://localhost:4000
+```
+
+**Remote development server:**
+```env
+VITE_API_TARGET=http://dev-server.example.com:4000
+```
+
+**Note**: Changes to environment variables require restarting the dev server.
 
 ## Running the Application
 

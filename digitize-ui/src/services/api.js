@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+// Use relative URL to leverage Vite's proxy configuration
+// This avoids CORS issues by routing through the dev server
 const API_BASE_URL = '/v1';
 
 const api = axios.create({

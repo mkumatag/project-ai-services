@@ -12,15 +12,17 @@ import {
   Tag,
   Pagination,
   Loading,
+  Modal,
 } from '@carbon/react';
 import { Renew } from '@carbon/icons-react';
 import { getAllJobs, getJobById } from '../services/api';
 
 const headers = [
   { key: 'job_id', header: 'Job ID' },
-  { key: 'status', header: 'Status' },
   { key: 'operation', header: 'Operation' },
-  { key: 'created_at', header: 'Created At' },
+  { key: 'status', header: 'Status' },
+  { key: 'documents', header: 'Documents' },
+  { key: 'submitted_at', header: 'Submitted At' },
   { key: 'actions', header: 'Actions' },
 ];
 
@@ -45,6 +47,8 @@ const JobMonitor = ({ refreshTrigger }) => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -55,9 +59,7 @@ const JobMonitor = ({ refreshTrigger }) => {
         offset: offset,
       });
       
-      // Mock data for demonstration since API returns empty
-      const mockJobs = response.data || [];
-      setJobs(mockJobs);
+      setJobs(response.data || []);
       setTotalItems(response.pagination?.total || 0);
     } catch (error) {
       console.error('Error fetching jobs:', error);
@@ -68,6 +70,9 @@ const JobMonitor = ({ refreshTrigger }) => {
 
   useEffect(() => {
     fetchJobs();
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(fetchJobs, 10000);
+    return () => clearInterval(interval);
   }, [page, pageSize, refreshTrigger]);
 
   const handleRefresh = () => {
@@ -77,29 +82,65 @@ const JobMonitor = ({ refreshTrigger }) => {
   const handleViewDetails = async (jobId) => {
     try {
       const jobDetails = await getJobById(jobId);
-      console.log('Job details:', jobDetails);
-      // You can add a modal or detail view here
-      alert(`Job Details:\n${JSON.stringify(jobDetails, null, 2)}`);
+      setSelectedJob(jobDetails);
+      setIsModalOpen(true);
     } catch (error) {
       console.error('Error fetching job details:', error);
     }
   };
 
+  const formatDocuments = (documents) => {
+    if (!documents || documents.length === 0) return 'No documents';
+    return (
+      <div>
+        {documents.slice(0, 2).map((doc, idx) => (
+          <div key={idx} style={{ marginBottom: '4px' }}>
+            <Tag type={getStatusKind(doc.status)} size="sm">
+              {doc.name}
+            </Tag>
+          </div>
+        ))}
+        {documents.length > 2 && (
+          <span style={{ fontSize: '0.75rem', color: '#525252' }}>
+            +{documents.length - 2} more
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const rows = jobs.map((job) => ({
-    id: job.job_id || job.id,
-    job_id: job.job_id || job.id,
-    status: (
-      <Tag type={getStatusKind(job.status)} size="sm">
-        {job.status}
+    id: job.job_id,
+    job_id: (
+      <span style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+        {job.job_id.substring(0, 8)}...
+      </span>
+    ),
+    operation: (
+      <Tag size="sm" type="blue">
+        {job.operation}
       </Tag>
     ),
-    operation: job.operation || 'N/A',
-    created_at: job.created_at ? new Date(job.created_at).toLocaleString() : 'N/A',
+    status: (
+      <Tag type={getStatusKind(job.status)} size="sm">
+        {job.status.replace('_', ' ')}
+      </Tag>
+    ),
+    documents: formatDocuments(job.documents),
+    submitted_at: job.submitted_at
+      ? new Date(job.submitted_at).toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'N/A',
     actions: (
       <Button
         kind="ghost"
         size="sm"
-        onClick={() => handleViewDetails(job.job_id || job.id)}
+        onClick={() => handleViewDetails(job.job_id)}
       >
         View Details
       </Button>
@@ -177,6 +218,73 @@ const JobMonitor = ({ refreshTrigger }) => {
           )}
         </>
       )}
+
+      {/* Job Details Modal */}
+      <Modal
+        open={isModalOpen}
+        onRequestClose={() => setIsModalOpen(false)}
+        modalHeading="Job Details"
+        primaryButtonText="Close"
+        onRequestSubmit={() => setIsModalOpen(false)}
+        size="lg"
+      >
+        {selectedJob && (
+          <div style={{ padding: '1rem' }}>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Job ID:</strong> {selectedJob.job_id}
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Operation:</strong> {selectedJob.operation}
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Status:</strong>{' '}
+              <Tag type={getStatusKind(selectedJob.status)} size="sm">
+                {selectedJob.status.replace('_', ' ')}
+              </Tag>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Submitted At:</strong>{' '}
+              {selectedJob.submitted_at
+                ? new Date(selectedJob.submitted_at).toLocaleString()
+                : 'N/A'}
+            </div>
+            {selectedJob.error && (
+              <div style={{ marginBottom: '1rem', color: '#da1e28' }}>
+                <strong>Error:</strong> {selectedJob.error}
+              </div>
+            )}
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Documents:</strong>
+              {selectedJob.documents && selectedJob.documents.length > 0 ? (
+                <div style={{ marginTop: '0.5rem' }}>
+                  {selectedJob.documents.map((doc, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '0.5rem',
+                        marginBottom: '0.5rem',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      <div><strong>Name:</strong> {doc.name}</div>
+                      <div><strong>ID:</strong> {doc.id}</div>
+                      <div>
+                        <strong>Status:</strong>{' '}
+                        <Tag type={getStatusKind(doc.status)} size="sm">
+                          {doc.status}
+                        </Tag>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div>No documents</div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

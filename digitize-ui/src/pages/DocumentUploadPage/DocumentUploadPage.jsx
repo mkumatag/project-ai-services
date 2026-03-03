@@ -15,7 +15,7 @@ import {
   Accordion,
   AccordionItem,
 } from '@carbon/react';
-import { Upload, DocumentPdf, CheckmarkFilled, Information } from '@carbon/icons-react';
+import { Upload, DocumentPdf, Close } from '@carbon/icons-react';
 import { uploadDocuments } from '../../services/api';
 import styles from './DocumentUploadPage.module.scss';
 
@@ -28,6 +28,7 @@ const DocumentUploadPage = () => {
   const [success, setSuccess] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [fileUploaderKey, setFileUploaderKey] = useState(0);
+  const [isFileListExpanded, setIsFileListExpanded] = useState(true);
 
   const handleFileChange = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
@@ -193,27 +194,54 @@ const DocumentUploadPage = () => {
                 multiple={operation === 'ingestion'}
                 onChange={handleFileChange}
                 size="lg"
+                className={styles.fileUploader}
               />
             </Tile>
 
             {/* Selected Files Display */}
             {files.length > 0 && (
               <Tile className={styles.fileListTile}>
-                <div className={styles.fileListHeader}>
+                <div
+                  className={styles.fileListHeader}
+                  onClick={() => setIsFileListExpanded(!isFileListExpanded)}
+                  role="button"
+                  tabIndex={0}
+                >
                   <DocumentPdf size={24} />
                   <h4>Selected Files ({files.length})</h4>
+                  <span className={`${styles.expandIcon} ${isFileListExpanded ? styles.expanded : ''}`}>
+                    ▼
+                  </span>
                 </div>
-                <ul className={styles.fileList}>
-                  {files.map((file, index) => (
-                    <li key={index} className={styles.fileItem}>
-                      <CheckmarkFilled size={16} className={styles.checkIcon} />
-                      <span className={styles.fileName}>{file.name}</span>
-                      <span className={styles.fileSize}>
-                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {isFileListExpanded && (
+                  <ul className={styles.fileList}>
+                    {files.map((file, index) => (
+                      <li key={index} className={styles.fileItem}>
+                        <DocumentPdf size={20} className={styles.fileIcon} />
+                        <span className={styles.fileName}>{file.name}</span>
+                        <span className={styles.fileSize}>
+                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                        <button
+                          className={styles.removeButton}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newFiles = files.filter((_, i) => i !== index);
+                            setFiles(newFiles);
+                            if (newFiles.length === 0) {
+                              setCurrentStep(1);
+                              setFileUploaderKey(prev => prev + 1);
+                            }
+                          }}
+                          aria-label="Remove file"
+                          title="Remove file"
+                        >
+                          <Close size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Tile>
             )}
 
