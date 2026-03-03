@@ -31,18 +31,42 @@ const headers = [
   { key: 'actions', header: 'Actions' },
 ];
 
-const getStatusKind = (status) => {
+const getStatusTagType = (status) => {
   switch (status) {
     case 'completed':
-      return 'green';
+      return { type: 'green' };
     case 'failed':
-      return 'red';
+      return { type: 'red' };
     case 'in_progress':
-      return 'blue';
+      return { type: 'blue' };
     case 'accepted':
-      return 'cyan';
+      return { type: 'cyan' };
     default:
-      return 'gray';
+      return { type: 'gray' };
+  }
+};
+
+const getOperationTagType = (operation) => {
+  switch (operation) {
+    case 'ingestion':
+      return { type: 'blue' };
+    case 'digitization':
+      return { type: 'purple' };
+    default:
+      return { type: 'cool-gray' };
+  }
+};
+
+const getDocumentTagType = (status) => {
+  switch (status) {
+    case 'completed':
+      return { type: 'green' };
+    case 'failed':
+      return { type: 'red' };
+    case 'in_progress':
+      return { type: 'blue' };
+    default:
+      return { type: 'gray' };
   }
 };
 
@@ -96,7 +120,7 @@ const JobMonitorPage = () => {
       <div>
         {documents.map((doc, idx) => (
           <div key={idx} style={{ marginBottom: '4px' }}>
-            <Tag type={getStatusKind(doc.status)} size="sm">
+            <Tag {...getDocumentTagType(doc.status)} size="sm">
               {doc.name}
             </Tag>
           </div>
@@ -108,17 +132,25 @@ const JobMonitorPage = () => {
   const rows = jobs.map((job) => ({
     id: job.job_id,
     job_id: (
-      <span style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-        {job.job_id.substring(0, 8)}...
+      <span style={{
+        fontFamily: 'IBM Plex Mono, monospace',
+        fontSize: '0.875rem',
+        color: 'var(--cds-text-primary)',
+        padding: '0.25rem 0.5rem',
+        backgroundColor: 'var(--cds-layer-02)',
+        borderRadius: '4px',
+        display: 'inline-block'
+      }}>
+        {job.job_id}
       </span>
     ),
     operation: (
-      <Tag size="sm" type="blue">
+      <Tag size="sm" {...getOperationTagType(job.operation)}>
         {job.operation}
       </Tag>
     ),
     status: (
-      <Tag type={getStatusKind(job.status)} size="sm">
+      <Tag {...getStatusTagType(job.status)} size="sm">
         {job.status.replace('_', ' ')}
       </Tag>
     ),
@@ -250,7 +282,7 @@ const JobMonitorPage = () => {
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <strong>Status:</strong>{' '}
-              <Tag type={getStatusKind(selectedJob.status)} size="sm">
+              <Tag {...getStatusTagType(selectedJob.status)} size="sm">
                 {selectedJob.status.replace('_', ' ')}
               </Tag>
             </div>
@@ -283,7 +315,7 @@ const JobMonitorPage = () => {
                       <div><strong>ID:</strong> {doc.id}</div>
                       <div>
                         <strong>Status:</strong>{' '}
-                        <Tag type={getStatusKind(doc.status)} size="sm">
+                        <Tag {...getDocumentTagType(doc.status)} size="sm">
                           {doc.status}
                         </Tag>
                       </div>
