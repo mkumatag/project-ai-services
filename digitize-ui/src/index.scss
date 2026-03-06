@@ -3,6 +3,7 @@
   $theme: themes.$white
 );
 @use '@carbon/react';
+@use '@carbon/ibm-products/css/index.min.css';
 
 html,
 body {
@@ -14,146 +15,35 @@ body {
 html,
 body,
 [data-carbon-theme='white'] {
-  background-color: #e8e8e8;
+  background-color: var(--cds-background);
 }
 
 // Dark theme
 [data-carbon-theme='g100'] {
-  background-color: #161616;
+  background-color: var(--cds-background);
   
   body {
-    background-color: #161616;
-  }
-  
-  // PageHeader dark theme support
-  .cds--header-panel {
-    background-color: #262626;
-  }
-  
-  .cds--page-header {
-    background-color: #262626;
-    
-    .cds--page-header__title {
-      color: #f4f4f4;
-    }
-    
-    .cds--page-header__subtitle {
-      color: #c6c6c6;
-    }
-  }
-  
-  // Tile dark theme
-  .cds--tile {
-    background-color: #262626;
-    color: #f4f4f4;
-  }
-  
-  // File uploader dark theme
-  .cds--file-browse-btn {
-    background-color: #0f62fe;
-    color: #ffffff;
-  }
-  
-  .cds--file__drop-container {
-    background-color: #262626;
-    border-color: #525252;
-  }
-  
-  // Progress indicator dark theme
-  .cds--progress-step-button {
-    color: #f4f4f4;
-  }
-  
-  .cds--progress-label {
-    color: #f4f4f4;
-  }
-  
-  .cds--progress-line {
-    background-color: #525252;
-  }
-  
-  // Accordion dark theme
-  .cds--accordion__item {
-    border-color: #525252;
-  }
-  
-  .cds--accordion__heading {
-    background-color: #262626;
-    
-    &:hover {
-      background-color: #353535;
-    }
-  }
-  
-  .cds--accordion__title {
-    color: #f4f4f4;
-  }
-  
-  .cds--accordion__content {
-    background-color: #262626;
-    color: #c6c6c6;
-  }
-  
-  // Button dark theme
-  .cds--btn--primary {
-    background-color: #0f62fe;
-    color: #ffffff;
-    
-    &:hover {
-      background-color: #0353e9;
-    }
-  }
-  
-  .cds--btn--secondary {
-    background-color: #393939;
-    color: #ffffff;
-    border-color: #393939;
-    
-    &:hover {
-      background-color: #474747;
-    }
-  }
-  
-  // Notification dark theme
-  .cds--inline-notification {
-    background-color: #262626;
-    color: #f4f4f4;
-  }
-  
-  // Loading dark theme
-  .cds--loading__stroke {
-    stroke: #f4f4f4;
+    background-color: var(--cds-background);
   }
 }
 
 .appLayout {
   min-height: 100vh;
   padding-top: 3rem;
-  padding-left: 3rem; // Space for collapsed sidebar
+  padding-left: 3rem;
   transition: background-color 0.2s ease;
+  background-color: var(--cds-background);
   
   main {
     transition: margin-left 0.11s cubic-bezier(0.2, 0, 1, 0.9);
   }
 }
 
-// Light theme layout
-[data-carbon-theme='white'] .appLayout {
-  background-color: #e8e8e8;
-}
-
-// Dark theme layout
-[data-carbon-theme='g100'] .appLayout {
-  background-color: #161616;
-}
-
 @media (min-width: 42rem) {
-  // grid gutters
   .cds--css-grid--full-width {
     padding: 0;
   }
 
-  // grid column margin
   .cds--css-grid-column {
     margin-inline: 0;
   }

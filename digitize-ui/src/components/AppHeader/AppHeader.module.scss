@@ -1,9 +1,18 @@
 .header {
-  font-size: large;
+  :global {
+    .cds--header__name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      
+      &--prefix {
+        font-weight: 600;
+      }
+    }
+  }
 }
 
 .iconWidth {
-  width: 60px;
+  width: 48px;
 }
 
 .menuBtn {

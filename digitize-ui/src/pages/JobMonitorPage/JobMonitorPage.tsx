@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { PageHeader } from '@carbon/ibm-products';
 import {
   DataTable,
   Table,
@@ -9,67 +8,98 @@ import {
   TableBody,
   TableCell,
   TableContainer,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  TableToolbarMenu,
+  TableToolbarAction,
+  TableBatchActions,
+  TableBatchAction,
+  TableSelectAll,
+  TableSelectRow,
   Pagination,
   Button,
   Tag,
-  Grid,
-  Column,
-  Modal,
-  Search,
-  Dropdown,
   Theme,
+  Link,
+  InlineNotification,
 } from '@carbon/react';
-import { Renew } from '@carbon/icons-react';
+import { SidePanel, NoDataEmptyState } from '@carbon/ibm-products';
+import { Download, Renew, Settings, Add, CheckmarkFilled, WarningFilled, InProgress, ErrorFilled, TrashCan, Close } from '@carbon/icons-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getAllJobs, getJobById, Job, Document } from '../../services/api';
+import { getAllJobs, getJobById, uploadDocuments, deleteJob, bulkDeleteJobs, Job, Document } from '../../services/api';
+import IngestSidePanel from '../../components/IngestSidePanel';
 import styles from './JobMonitorPage.module.scss';
 
 const headers = [
-  { key: 'job_id', header: 'Job ID' },
-  { key: 'operation', header: 'Operation' },
+  { key: 'job_name', header: 'Job name' },
+  { key: 'type', header: 'Type' },
   { key: 'status', header: 'Status' },
-  { key: 'documents', header: 'Documents' },
-  { key: 'submitted_at', header: 'Submitted At' },
-  { key: 'actions', header: 'Actions' },
+  { key: 'started', header: 'Started' },
+  { key: 'duration', header: 'Duration' },
+  { key: 'actions', header: '' },
 ];
 
-const getStatusTagType = (status: string) => {
+const getStatusIcon = (status: string) => {
   switch (status) {
     case 'completed':
-      return { type: 'green' };
+    case 'Ingested':
+    case 'Digitized':
+      return <CheckmarkFilled size={16} className={styles.statusIconSuccess} />;
     case 'failed':
-      return { type: 'red' };
+    case 'Ingestion error':
+    case 'Digitization error':
+      return <ErrorFilled size={16} className={styles.statusIconError} />;
     case 'in_progress':
-      return { type: 'blue' };
-    case 'accepted':
-      return { type: 'cyan' };
+    case 'Ingesting...':
+    case 'Digitizing...':
+      return <InProgress size={16} className={styles.statusIconProgress} />;
     default:
-      return { type: 'gray' };
+      return null;
   }
 };
 
-const getOperationTagType = (operation: string) => {
-  switch (operation) {
-    case 'ingestion':
-      return { type: 'blue' };
-    case 'digitization':
-      return { type: 'purple' };
-    default:
-      return { type: 'cool-gray' };
+const getTypeTagStyle = (type: string) => {
+  if (type === 'Ingestion') {
+    return 'gray';
+  } else if (type === 'Digitization only') {
+    return 'cool-gray';
   }
+  return 'gray';
 };
 
-const getDocumentTagType = (status: string) => {
-  switch (status) {
-    case 'completed':
-      return { type: 'green' };
-    case 'failed':
-      return { type: 'red' };
-    case 'in_progress':
-      return { type: 'blue' };
-    default:
-      return { type: 'gray' };
+const calculateDuration = (startTime: string | undefined) => {
+  if (!startTime) return 'N/A';
+  
+  const start = new Date(startTime);
+  const now = new Date();
+  const diffMs = now.getTime() - start.getTime();
+  
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalHours / 24);
+  
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
+  const seconds = totalSeconds % 60;
+  
+  const parts = [];
+  
+  if (days > 0) {
+    parts.push(`${days}d`);
   }
+  if (hours > 0 || days > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0 || hours > 0 || days > 0) {
+    parts.push(`${minutes}m`);
+  }
+  if (parts.length === 0) {
+    parts.push(`${seconds}s`);
+  }
+  
+  return parts.join(' ');
 };
 
 const JobMonitorPage = () => {
@@ -77,13 +107,24 @@ const JobMonitorPage = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(25);
+  const [pageSize, setPageSize] = useState<number>(100);
   const [totalItems, setTotalItems] = useState<number>(0);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isSidePanelOpen, setIsSidePanelOpen] = useState<boolean>(false);
   const [searchValue, setSearchValue] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [operationFilter, setOperationFilter] = useState<string>('all');
+  const [isIngestSidePanelOpen, setIsIngestSidePanelOpen] = useState<boolean>(false);
+  const [uploadStatus, setUploadStatus] = useState<{
+    show: boolean;
+    kind: 'success' | 'error' | 'info';
+    title: string;
+    subtitle?: string;
+  }>({ show: false, kind: 'info', title: '' });
+  const [deleteStatus, setDeleteStatus] = useState<{
+    show: boolean;
+    kind: 'success' | 'error' | 'info';
+    title: string;
+    subtitle?: string;
+  }>({ show: false, kind: 'info', title: '' });
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -105,7 +146,6 @@ const JobMonitorPage = () => {
 
   useEffect(() => {
     fetchJobs();
-    // Auto-refresh every 10 seconds
     const interval = setInterval(fetchJobs, 10000);
     return () => clearInterval(interval);
   }, [page, pageSize]);
@@ -114,301 +154,412 @@ const JobMonitorPage = () => {
     try {
       const jobDetails = await getJobById(jobId);
       setSelectedJob(jobDetails);
-      setIsModalOpen(true);
+      setIsSidePanelOpen(true);
     } catch (error) {
       console.error('Error fetching job details:', error);
     }
   };
 
-  const formatDocuments = (documents: Document[] | undefined) => {
-    if (!documents || documents.length === 0) return 'No documents';
-    return (
-      <div>
-        {documents.map((doc, idx) => (
-          <div key={idx} style={{ marginBottom: '4px' }}>
-            <Tag {...getDocumentTagType(doc.status)} size="sm">
-              {doc.name}
-            </Tag>
-          </div>
-        ))}
-      </div>
-    );
+  const handleIngestSubmit = async (
+    jobName: string,
+    operation: string,
+    outputFormat: string,
+    files: File[]
+  ) => {
+    try {
+      setUploadStatus({
+        show: true,
+        kind: 'info',
+        title: 'Uploading documents...',
+        subtitle: `Uploading ${files.length} file(s)`,
+      });
+
+      const response = await uploadDocuments(files, operation, outputFormat);
+
+      setUploadStatus({
+        show: true,
+        kind: 'success',
+        title: 'Documents uploaded successfully',
+        subtitle: `Job ID: ${response.job_id}`,
+      });
+
+      // Refresh jobs list after successful upload
+      setTimeout(() => {
+        fetchJobs();
+        setUploadStatus({ show: false, kind: 'info', title: '' });
+      }, 3000);
+    } catch (error: any) {
+      console.error('Error uploading documents:', error);
+      setUploadStatus({
+        show: true,
+        kind: 'error',
+        title: 'Upload failed',
+        subtitle: error.response?.data?.message || error.message || 'An error occurred',
+      });
+
+      // Hide error after 5 seconds
+      setTimeout(() => {
+        setUploadStatus({ show: false, kind: 'info', title: '' });
+      }, 5000);
+    }
   };
 
-  // Filter jobs based on search, operation, and status
+  const handleDeleteJobs = async (selectedRows: any[]) => {
+    try {
+      const jobIds = selectedRows.map(row => row.id);
+      
+      setDeleteStatus({
+        show: true,
+        kind: 'info',
+        title: 'Deleting jobs...',
+        subtitle: `Deleting ${jobIds.length} job(s)`,
+      });
+
+      if (jobIds.length === 1) {
+        await deleteJob(jobIds[0]);
+      } else {
+        await bulkDeleteJobs(jobIds);
+      }
+
+      setDeleteStatus({
+        show: true,
+        kind: 'success',
+        title: 'Jobs deleted successfully',
+        subtitle: `${jobIds.length} job(s) deleted`,
+      });
+
+      // Refresh jobs list after successful deletion
+      setTimeout(() => {
+        fetchJobs();
+        setDeleteStatus({ show: false, kind: 'info', title: '' });
+      }, 2000);
+    } catch (error: any) {
+      console.error('Error deleting jobs:', error);
+      setDeleteStatus({
+        show: true,
+        kind: 'error',
+        title: 'Delete failed',
+        subtitle: error.response?.data?.message || error.message || 'An error occurred',
+      });
+
+      // Hide error after 5 seconds
+      setTimeout(() => {
+        setDeleteStatus({ show: false, kind: 'info', title: '' });
+      }, 5000);
+    }
+  };
+
+  const getJobName = (job: Job) => {
+    if (job.documents && job.documents.length > 0) {
+      return job.documents[0].name || job.job_id;
+    }
+    return job.job_id;
+  };
+
+  const getJobType = (job: Job) => {
+    return job.operation === 'ingestion' ? 'Ingestion' : 'Digitization only';
+  };
+
+  const getJobStatus = (job: Job) => {
+    if (job.status === 'completed') {
+      return job.operation === 'ingestion' ? 'Ingested' : 'Digitized';
+    } else if (job.status === 'failed') {
+      return job.operation === 'ingestion' ? 'Ingestion error' : 'Digitization error';
+    } else if (job.status === 'in_progress') {
+      return job.operation === 'ingestion' ? 'Ingesting...' : 'Digitizing...';
+    }
+    return job.status;
+  };
+
+  const getErrorMessage = (job: Job) => {
+    if (job.status === 'failed' && job.error) {
+      return job.error;
+    }
+    return 'Error message goes here';
+  };
+
   const filteredJobs = jobs.filter((job) => {
-    // Search filter
-    const matchesSearch = searchValue === '' ||
-      job.job_id?.toLowerCase().includes(searchValue.toLowerCase()) ||
-      job.operation?.toLowerCase().includes(searchValue.toLowerCase()) ||
-      job.documents?.some(doc => doc.name?.toLowerCase().includes(searchValue.toLowerCase()));
-
-    // Operation filter
-    const matchesOperation = operationFilter === 'all' || job.operation === operationFilter;
-
-    // Status filter
-    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
-
-    return matchesSearch && matchesOperation && matchesStatus;
+    if (searchValue === '') return true;
+    const jobName = getJobName(job).toLowerCase();
+    const jobType = getJobType(job).toLowerCase();
+    const jobStatus = getJobStatus(job).toLowerCase();
+    return jobName.includes(searchValue.toLowerCase()) ||
+           jobType.includes(searchValue.toLowerCase()) ||
+           jobStatus.includes(searchValue.toLowerCase());
   });
 
-  const rows = filteredJobs.map((job) => ({
-    id: job.job_id,
-    job_id: (
-      <span style={{
-        fontFamily: 'IBM Plex Mono, monospace',
-        fontSize: '0.875rem',
-        color: 'var(--cds-text-primary)',
-        padding: '0.25rem 0.5rem',
-        backgroundColor: 'var(--cds-layer-02)',
-        borderRadius: '4px',
-        display: 'inline-block'
-      }}>
-        {job.job_id}
-      </span>
-    ),
-    operation: (
-      <Tag size="sm" {...getOperationTagType(job.operation)}>
-        {job.operation}
-      </Tag>
-    ),
-    status: (
-      <Tag {...getStatusTagType(job.status)} size="sm">
-        {job.status.replace('_', ' ')}
-      </Tag>
-    ),
-    documents: formatDocuments(job.documents),
-    submitted_at: job.submitted_at
-      ? new Date(job.submitted_at).toLocaleString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-      : 'N/A',
-    actions: (
-      <Button
-        kind="tertiary"
-        size="sm"
-        onClick={() => handleViewDetails(job.job_id)}
-      >
-        View Details
-      </Button>
-    ),
-  }));
+  const rows = filteredJobs.map((job) => {
+    const jobStatus = getJobStatus(job);
+    const hasError = job.status === 'failed';
+    
+    return {
+      id: job.job_id,
+      job_name: getJobName(job),
+      type: (
+        <Tag type={getTypeTagStyle(getJobType(job))} size="md">
+          {getJobType(job)}
+        </Tag>
+      ),
+      status: (
+        <div className={styles.statusCell}>
+          {getStatusIcon(jobStatus)}
+          <span className={styles.statusText}>{jobStatus}</span>
+        </div>
+      ),
+      started: job.submitted_at
+        ? new Date(job.submitted_at).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : 'N/A',
+      duration: calculateDuration(job.submitted_at),
+      actions: hasError ? (
+        <div className={styles.errorMessage}>
+          <ErrorFilled size={16} className={styles.errorIcon} />
+          <span>{getErrorMessage(job)}</span>
+        </div>
+      ) : (
+        <Button
+          kind="ghost"
+          size="sm"
+          onClick={() => handleViewDetails(job.job_id)}
+        >
+          View documents
+        </Button>
+      ),
+    };
+  });
 
   return (
     <Theme theme={effectiveTheme}>
       <div className={styles.jobMonitorPage}>
-        <PageHeader
-          title={{ text: 'Job Monitor' }}
-          subtitle="Track the status of document processing jobs"
-        />
-
-      <div className={styles.content}>
-        {/* Toolbar with filters and search */}
-        <div className={styles.toolbar}>
-          <div className={styles.filterGroup}>
-            <Dropdown
-              id="operation-filter"
-              titleText=""
-              label="Operation"
-              size="lg"
-              items={[
-                { id: 'all', text: 'All Operations' },
-                { id: 'ingestion', text: 'Ingestion' },
-                { id: 'digitization', text: 'Digitization' },
-              ]}
-              itemToString={(item) => (item ? item.text : '')}
-              selectedItem={
-                operationFilter === 'all'
-                  ? { id: 'all', text: 'All Operations' }
-                  : { id: operationFilter, text: operationFilter.charAt(0).toUpperCase() + operationFilter.slice(1) }
-              }
-              onChange={({ selectedItem }) => selectedItem && setOperationFilter(selectedItem.id)}
-            />
-            
-            <Dropdown
-              id="status-filter"
-              titleText=""
-              label="Status"
-              size="lg"
-              items={[
-                { id: 'all', text: 'All Status' },
-                { id: 'accepted', text: 'Accepted' },
-                { id: 'in_progress', text: 'In Progress' },
-                { id: 'completed', text: 'Completed' },
-                { id: 'failed', text: 'Failed' },
-              ]}
-              itemToString={(item) => (item ? item.text : '')}
-              selectedItem={
-                statusFilter === 'all'
-                  ? { id: 'all', text: 'All Status' }
-                  : { id: statusFilter, text: statusFilter.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }
-              }
-              onChange={({ selectedItem }) => selectedItem && setStatusFilter(selectedItem.id)}
+        {/* Upload Status Notification */}
+        {uploadStatus.show && (
+          <div className={styles.notificationWrapper}>
+            <InlineNotification
+              kind={uploadStatus.kind}
+              title={uploadStatus.title}
+              subtitle={uploadStatus.subtitle}
+              onClose={() => setUploadStatus({ show: false, kind: 'info', title: '' })}
+              hideCloseButton={false}
+              lowContrast
             />
           </div>
+        )}
 
-          <div className={styles.searchWrapper}>
-            <Search
-              size="lg"
-              placeholder="Search"
-              labelText="Search"
-              closeButtonLabelText="Clear search input"
-              id="search-jobs"
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
+        {/* Delete Status Notification */}
+        {deleteStatus.show && (
+          <div className={styles.notificationWrapper}>
+            <InlineNotification
+              kind={deleteStatus.kind}
+              title={deleteStatus.title}
+              subtitle={deleteStatus.subtitle}
+              onClose={() => setDeleteStatus({ show: false, kind: 'info', title: '' })}
+              hideCloseButton={false}
+              lowContrast
             />
           </div>
+        )}
 
-          <div className={styles.actions}>
-            <Button
-              kind="primary"
-              size="lg"
-              renderIcon={Renew}
-              hasIconOnly
-              iconDescription="Refresh"
-              onClick={fetchJobs}
-              disabled={loading}
-            />
+        {/* Page Header */}
+        <div className={styles.pageHeader}>
+          <div className={styles.headerContent}>
+            <h1 className={styles.pageTitle}>Ingested documents log</h1>
+            <Link href="#" className={styles.learnMore}>
+              Learn more →
+            </Link>
           </div>
         </div>
 
-        <Grid fullWidth>
-          <Column lg={16} md={8} sm={4}>
-            <DataTable rows={rows} headers={headers} size="lg">
-              {({
-                rows,
-                headers,
-                getHeaderProps,
-                getRowProps,
-                getTableProps,
-              }) => (
-                <>
-                  <TableContainer>
-                    <Table {...getTableProps()}>
-                      <TableHead>
+        {/* Data Table with Enhanced Toolbar */}
+        <div className={styles.tableWrapper}>
+          <DataTable rows={rows} headers={headers} size="lg">
+            {({
+              rows,
+              headers,
+              getHeaderProps,
+              getRowProps,
+              getTableProps,
+              getSelectionProps,
+              getToolbarProps,
+              getBatchActionProps,
+              selectedRows,
+              getTableContainerProps,
+            }) => {
+              const batchActionProps = getBatchActionProps();
+              
+              return (
+                <TableContainer
+                  {...getTableContainerProps()}
+                  className={styles.tableContainer}
+                >
+                  <TableToolbar {...getToolbarProps()}>
+                    <TableBatchActions {...batchActionProps}>
+                      <TableBatchAction
+                        tabIndex={batchActionProps.shouldShowBatchActions ? 0 : -1}
+                        renderIcon={TrashCan}
+                        onClick={() => handleDeleteJobs(selectedRows)}
+                      >
+                        Delete
+                      </TableBatchAction>
+                    </TableBatchActions>
+                    <TableToolbarContent>
+                      <TableToolbarSearch
+                        persistent
+                        placeholder="Search"
+                        onChange={(e: any, value?: string) => setSearchValue(value || '')}
+                        value={searchValue}
+                      />
+                      <Button
+                        kind="ghost"
+                        hasIconOnly
+                        renderIcon={Download}
+                        iconDescription="Download"
+                        tooltipPosition="bottom"
+                      />
+                      <Button
+                        kind="ghost"
+                        hasIconOnly
+                        renderIcon={Renew}
+                        iconDescription="Refresh"
+                        onClick={fetchJobs}
+                        disabled={loading}
+                        tooltipPosition="bottom"
+                      />
+                      <TableToolbarMenu
+                        renderIcon={Settings}
+                        iconDescription="Settings"
+                      >
+                        <TableToolbarAction onClick={() => console.log('Action 1')}>
+                          Action 1
+                        </TableToolbarAction>
+                        <TableToolbarAction onClick={() => console.log('Action 2')}>
+                          Action 2
+                        </TableToolbarAction>
+                        <TableToolbarAction onClick={() => console.log('Action 3')}>
+                          Action 3
+                        </TableToolbarAction>
+                      </TableToolbarMenu>
+                      <Button
+                        kind="primary"
+                        renderIcon={Add}
+                        onClick={() => setIsIngestSidePanelOpen(true)}
+                      >
+                        Ingest
+                      </Button>
+                    </TableToolbarContent>
+                  </TableToolbar>
+                  <Table {...getTableProps()} className={styles.table}>
+                    <TableHead>
+                      <TableRow>
+                        <TableSelectAll {...getSelectionProps()} />
+                        {headers.map((header) => {
+                          const { key, ...rest } = getHeaderProps({ header });
+                          return (
+                            <TableHeader key={key} {...rest}>
+                              {header.header}
+                            </TableHeader>
+                          );
+                        })}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.length === 0 ? (
                         <TableRow>
-                          {headers.map((header) => {
-                            const { key, ...rest } = getHeaderProps({ header });
-                            return (
-                              <TableHeader key={key} {...rest}>
-                                {header.header}
-                              </TableHeader>
-                            );
-                          })}
+                          <TableCell colSpan={headers.length + 1} className={styles.emptyStateCell}>
+                            <NoDataEmptyState
+                              illustrationTheme="light"
+                              size="lg"
+                              title="Start by ingesting a document"
+                              subtitle="To ingest a document, click Ingest."
+                            />
+                          </TableCell>
                         </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {rows.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={headers.length}>
-                              {loading ? 'Loading jobs...' : 'No jobs found. Upload documents to create jobs.'}
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          rows.map((row) => {
-                            const { key: rowKey, ...rowProps } = getRowProps({ row });
-                            return (
-                              <TableRow key={rowKey} {...rowProps}>
-                                {row.cells.map((cell) => (
-                                  <TableCell key={cell.id}>{cell.value}</TableCell>
-                                ))}
-                              </TableRow>
-                            );
-                          })
-                        )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-
-                  {totalItems > pageSize && (
+                      ) : (
+                        rows.map((row) => {
+                          const { key: rowKey, ...rowProps } = getRowProps({ row });
+                          return (
+                            <TableRow key={rowKey} {...rowProps}>
+                              <TableSelectRow {...getSelectionProps({ row })} />
+                              {row.cells.map((cell) => (
+                                <TableCell key={cell.id}>{cell.value}</TableCell>
+                              ))}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                  {rows.length > 0 && (
                     <Pagination
                       page={page}
                       pageSize={pageSize}
-                      pageSizes={[5, 10, 20, 30]}
+                      pageSizes={[10, 25, 50, 100]}
                       totalItems={totalItems}
                       onChange={({ page, pageSize }) => {
                         setPage(page);
                         setPageSize(pageSize);
                       }}
+                      itemsPerPageText="Items per page:"
                     />
                   )}
-                </>
-              )}
-            </DataTable>
-          </Column>
-        </Grid>
-      </div>
+                </TableContainer>
+              );
+            }}
+          </DataTable>
+        </div>
 
-      {/* Job Details Modal */}
-      <Modal
-        open={isModalOpen}
-        onRequestClose={() => setIsModalOpen(false)}
-        modalHeading="Job Details"
-        primaryButtonText="Close"
-        onRequestSubmit={() => setIsModalOpen(false)}
-        size="lg"
-      >
-        {selectedJob && (
-          <div style={{ padding: '1rem' }}>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Job ID:</strong> {selectedJob.job_id}
-            </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Operation:</strong> {selectedJob.operation}
-            </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Status:</strong>{' '}
-              <Tag {...getStatusTagType(selectedJob.status)} size="sm">
-                {selectedJob.status.replace('_', ' ')}
-              </Tag>
-            </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Submitted At:</strong>{' '}
-              {selectedJob.submitted_at
-                ? new Date(selectedJob.submitted_at).toLocaleString()
-                : 'N/A'}
-            </div>
-            {selectedJob.error && (
-              <div style={{ marginBottom: '1rem', color: '#da1e28' }}>
-                <strong>Error:</strong> {selectedJob.error}
+        {/* Ingest Side Panel */}
+        <IngestSidePanel
+          open={isIngestSidePanelOpen}
+          onClose={() => setIsIngestSidePanelOpen(false)}
+          onSubmit={handleIngestSubmit}
+        />
+
+        {/* Job Details Side Panel */}
+        <SidePanel
+          open={isSidePanelOpen}
+          onRequestClose={() => setIsSidePanelOpen(false)}
+          title="Documents"
+          slideIn
+          selectorPageContent=".jobMonitorPage"
+          placement="right"
+          size="md"
+          includeOverlay
+        >
+          {selectedJob && (
+            <div className={styles.sidePanelContent}>
+              <div className={styles.sidePanelSection}>
+                <h6 className={styles.sectionLabel}>Job name</h6>
+                <p className={styles.sectionValue}>{getJobName(selectedJob)}</p>
               </div>
-            )}
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Documents:</strong>
-              {selectedJob.documents && selectedJob.documents.length > 0 ? (
-                <div style={{ marginTop: '0.5rem' }}>
-                  {selectedJob.documents.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '0.5rem',
-                        marginBottom: '0.5rem',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      <div><strong>Name:</strong> {doc.name}</div>
-                      <div><strong>ID:</strong> {doc.id}</div>
-                      <div>
-                        <strong>Status:</strong>{' '}
-                        <Tag {...getDocumentTagType(doc.status)} size="sm">
-                          {doc.status}
-                        </Tag>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div>No documents</div>
-              )}
+
+              <div className={styles.sidePanelSection}>
+                <h6 className={styles.sectionLabel}>Ingested PDF files</h6>
+                {selectedJob.documents && selectedJob.documents.length > 0 ? (
+                  <div className={styles.documentTagsList}>
+                    {selectedJob.documents.map((doc, idx) => (
+                      <Tag
+                        key={idx}
+                        type="gray"
+                        size="md"
+                        className={styles.documentTag}
+                      >
+                        {doc.name}
+                      </Tag>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.noDocuments}>No documents</p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </Modal>
+          )}
+        </SidePanel>
       </div>
     </Theme>
   );

@@ -1,5 +1,5 @@
 import { Theme, SideNav, SideNavItems, SideNavLink } from '@carbon/react';
-import { Upload, Activity, Document } from '@carbon/icons-react';
+import { Activity, Document } from '@carbon/icons-react';
 import { NavLink } from 'react-router-dom';
 import { useRef, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -36,15 +36,6 @@ const Navbar = ({ isSideNavOpen, setIsSideNavOpen }: NavbarProps) => {
         ref={navRef}
       >
         <SideNavItems>
-          <SideNavLink
-            renderIcon={Upload}
-            as={NavLink}
-            to="/upload"
-            className={styles.sideNavItem}
-          >
-            Upload Documents
-          </SideNavLink>
-
           <SideNavLink
             renderIcon={Activity}
             as={NavLink}

@@ -1,96 +1,146 @@
+@use '@carbon/react/scss/spacing' as *;
+
 .documentListPage {
   background-color: var(--cds-background);
   min-height: 100vh;
   padding: 0;
+}
 
+.pageHeader {
+  background-color: var(--cds-background);
+  padding: 2rem 2rem 1.5rem 2rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 100%;
+}
+
+.pageTitle {
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--cds-text-primary);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.learnMore {
+  color: var(--cds-link-primary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.tableWrapper {
+  background-color: var(--cds-layer-01);
+}
+
+.tableContainer {
+  background-color: var(--cds-layer-01);
+  
   :global {
-    .cds--page-header {
-      background-color: var(--cds-background);
-      padding: 2rem 2rem 1rem 2rem;
-    }
-
-    // Table styling
     .cds--data-table-container {
-      background-color: var(--cds-layer-01);
-      padding: 0;
-      border-radius: 0;
-    }
-
-    .cds--table-toolbar {
-      background-color: var(--cds-layer-02);
-      border-bottom: none;
-      padding: 0.75rem 1rem;
-    }
-
-    .cds--data-table {
-      background-color: var(--cds-layer-01);
-
-      thead {
-        background-color: var(--cds-layer-accent-01);
-
-        th {
-          background-color: var(--cds-layer-accent-01);
-          color: var(--cds-text-primary);
-          font-weight: 600;
-          font-size: 0.875rem;
-          padding: 1rem;
-          border-bottom: 1px solid var(--cds-border-subtle-01);
-        }
-      }
-
-      tbody {
-        tr {
-          border-bottom: 1px solid var(--cds-border-subtle-01);
-          background-color: var(--cds-layer-01);
-
-          &:hover {
-            background-color: var(--cds-layer-hover-01);
-          }
-
-          td {
-            padding: 1rem;
-            color: var(--cds-text-primary);
-            font-size: 0.875rem;
-            vertical-align: middle;
-            background-color: transparent;
-          }
-        }
-      }
-    }
-
-    .cds--pagination {
-      background-color: var(--cds-layer-02);
-      border-top: none;
-      padding: 0.5rem 1rem;
-    }
-
-    .cds--search {
-      background-color: var(--cds-field-01);
+      padding-top: 0;
     }
     
-    .cds--search-input {
-      background-color: var(--cds-field-01);
-      color: var(--cds-text-primary);
+    .cds--table-toolbar {
+      background-color: var(--cds-layer-01);
+      border-bottom: 1px solid var(--cds-border-subtle-01);
+    }
+    
+    .cds--toolbar-content {
+      background-color: var(--cds-layer-01);
+      justify-content: flex-start;
+    }
+    
+    .cds--batch-actions {
+      background-color: var(--cds-background-brand);
+    }
+    
+    .cds--toolbar-search-container-persistent {
+      width: 100%;
+      max-width: 400px;
+      margin-right: auto;
     }
   }
 }
 
-.content {
-  padding: 0 2rem 2rem 2rem;
+.table {
+  :global {
+    thead {
+      background-color: var(--cds-layer-accent-01);
+      
+      th {
+        background-color: var(--cds-layer-accent-01);
+        color: var(--cds-text-primary);
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 1rem;
+        border-bottom: 1px solid var(--cds-border-subtle-01);
+        vertical-align: middle;
+      }
+    }
+    
+    tbody {
+      tr {
+        border-bottom: 1px solid var(--cds-border-subtle-01);
+        background-color: var(--cds-layer-01);
+        
+        &:hover {
+          background-color: var(--cds-layer-hover-01);
+        }
+        
+        td {
+          padding: 1rem;
+          color: var(--cds-text-primary);
+          font-size: 0.875rem;
+          vertical-align: middle;
+          background-color: transparent;
+        }
+      }
+    }
+  }
 }
 
-.tableContent {
-  background-color: var(--cds-layer-01);
-  border-radius: 0;
-}
-
-.rowActions {
+.statusCell {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
-.noDataContent {
-  margin: 2rem 0;
+.statusText {
+  color: var(--cds-text-primary);
+}
+
+.statusIconSuccess {
+  fill: var(--cds-support-success);
+}
+
+.statusIconError {
+  fill: var(--cds-support-error);
+}
+
+.statusIconProgress {
+  fill: var(--cds-support-info);
+}
+
+.emptyStateCell {
+  padding: $spacing-09 $spacing-05 !important;
+  border-bottom: none !important;
+  background-color: var(--cds-layer-01) !important;
+  
+  :global {
+    tr:hover & {
+      background-color: var(--cds-layer-01) !important;
+    }
+  }
 }
 
 .modalContent {

@@ -13,7 +13,7 @@ const MainLayout = () => {
         isSideNavOpen={isSideNavOpen}
         setIsSideNavOpen={setIsSideNavOpen}
       />
-
+      
       <Navbar
         isSideNavOpen={isSideNavOpen}
         setIsSideNavOpen={setIsSideNavOpen}

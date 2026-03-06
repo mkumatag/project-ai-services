@@ -105,8 +105,8 @@ export const getAllJobs = async (params: GetJobsParams = {}): Promise<JobsRespon
 };
 
 export const getJobById = async (jobId: string): Promise<Job> => {
-  const response: AxiosResponse<Job> = await api.get(`/documents/jobs/${jobId}`);
-  return response.data;
+  const response: AxiosResponse<{ data: Job }> = await api.get(`/documents/jobs/${jobId}`);
+  return response.data.data;
 };
 
 // Document Management
@@ -145,6 +145,18 @@ export const deleteDocument = async (docId: string): Promise<{ message: string }
 
 export const bulkDeleteDocuments = async (): Promise<{ message: string }> => {
   const response: AxiosResponse<{ message: string }> = await api.delete('/documents?confirm=true');
+  return response.data;
+};
+
+export const deleteJob = async (jobId: string): Promise<{ message: string }> => {
+  const response: AxiosResponse<{ message: string }> = await api.delete(`/documents/jobs/${jobId}`);
+  return response.data;
+};
+
+export const bulkDeleteJobs = async (jobIds: string[]): Promise<{ message: string }> => {
+  const response: AxiosResponse<{ message: string }> = await api.post('/documents/jobs/bulk-delete', {
+    job_ids: jobIds,
+  });
   return response.data;
 };
 

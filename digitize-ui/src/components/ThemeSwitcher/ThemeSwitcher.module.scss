@@ -11,8 +11,8 @@
   top: calc(100% + 0.5rem);
   right: 0;
   min-width: 200px;
-  background-color: var(--cds-layer-01, #ffffff);
-  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  background-color: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle-01);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   z-index: 9000;
   border-radius: 4px;
@@ -23,9 +23,9 @@
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--cds-text-primary, #161616);
-  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-  background-color: var(--cds-layer-01, #ffffff);
+  color: var(--cds-text-primary);
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+  background-color: var(--cds-layer-01);
 }
 
 .dropdownList {
@@ -42,62 +42,32 @@
   padding: 0.75rem 1rem;
   border: none;
   background: none;
-  color: var(--cds-text-primary, #161616);
+  color: var(--cds-text-primary);
   font-size: 0.875rem;
   cursor: pointer;
   text-align: left;
   transition: background-color 0.11s;
 
   &:hover {
-    background-color: var(--cds-layer-hover-01, #e8e8e8);
+    background-color: var(--cds-layer-hover-01);
   }
 
   &.active {
-    background-color: var(--cds-layer-selected-01, #e0e0e0);
+    background-color: var(--cds-layer-selected-01);
     font-weight: 600;
   }
 }
 
 .optionIcon {
   flex-shrink: 0;
-  fill: var(--cds-icon-primary, #161616);
+  fill: var(--cds-icon-primary);
 }
 
 .checkmark {
   margin-left: auto;
-  color: var(--cds-support-success, #24a148);
+  color: var(--cds-support-success);
   font-weight: bold;
   font-size: 1rem;
-}
-
-// Dark theme support
-:global([data-carbon-theme='g100']) {
-  .dropdown {
-    background-color: var(--cds-layer-01, #262626);
-    border-color: var(--cds-border-subtle-01, #525252);
-  }
-
-  .dropdownHeader {
-    color: var(--cds-text-primary, #f4f4f4);
-    background-color: var(--cds-layer-01, #262626);
-    border-bottom-color: var(--cds-border-subtle-01, #525252);
-  }
-
-  .dropdownItem {
-    color: var(--cds-text-primary, #f4f4f4);
-
-    &:hover {
-      background-color: var(--cds-layer-hover-01, #353535);
-    }
-
-    &.active {
-      background-color: var(--cds-layer-selected-01, #393939);
-    }
-  }
-
-  .optionIcon {
-    fill: var(--cds-icon-primary, #f4f4f4);
-  }
 }
 
 // Made with Bob

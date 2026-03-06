@@ -38,8 +38,7 @@ const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }: AppHeaderProps) => {
   
   return (
     <>
-      <Theme theme={effectiveTheme === 'white' ? 'g100' : 'g100'}>
-        <Header aria-label="Digitize Service">
+      <Header aria-label="IBM AI Services" className={styles.header}>
           <HeaderMenuButton
             aria-label="Open menu"
             onClick={(e) => {
@@ -51,8 +50,8 @@ const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }: AppHeaderProps) => {
             className={styles.menuBtn}
           />
 
-          <HeaderName prefix="" href="#" onClick={handleLogoClick} className={styles.headerName}>
-            Digitize Service
+          <HeaderName prefix="IBM" href="#" onClick={handleLogoClick} className={styles.headerName}>
+            AI Services
           </HeaderName>
 
           <HeaderGlobalBar>
@@ -65,8 +64,7 @@ const AppHeader = ({ isSideNavOpen, setIsSideNavOpen }: AppHeaderProps) => {
               <Help size={20} />
             </HeaderGlobalAction>
           </HeaderGlobalBar>
-        </Header>
-      </Theme>
+      </Header>
 
       <Theme theme={effectiveTheme}>
         <Modal

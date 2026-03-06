@@ -241,32 +241,12 @@
   button {
     flex: 0 0 auto;
   }
-  
-  :global(.cds--btn--primary) {
-    background-color: var(--cds-button-primary) !important;
-    color: var(--cds-text-on-color) !important;
-    
-    &:hover {
-      background-color: var(--cds-button-primary-hover) !important;
-    }
-  }
-  
-  :global(.cds--btn--secondary) {
-    background-color: transparent !important;
-    color: var(--cds-button-secondary) !important;
-    border-color: var(--cds-button-secondary) !important;
-  }
-  
-  :global(.cds--btn__icon) {
-    fill: currentColor !important;
-  }
 }
 
 .loadingContainer {
   margin-top: 2rem;
 }
 
-// Info Panel Styles
 .infoPanel {
   padding: 2rem 2rem 2rem 1rem;
   position: sticky;
@@ -365,7 +345,6 @@
   }
 }
 
-// Completion State Styles
 .completionContainer {
   display: flex;
   justify-content: center;
@@ -449,32 +428,8 @@
   button {
     width: 100%;
   }
-
-  :global(.cds--btn--primary) {
-    background-color: var(--cds-button-primary) !important;
-    color: var(--cds-text-on-color) !important;
-
-    &:hover {
-      background-color: var(--cds-button-primary-hover) !important;
-    }
-  }
-
-  :global(.cds--btn--secondary) {
-    background-color: transparent !important;
-    color: var(--cds-button-secondary) !important;
-    border-color: var(--cds-button-secondary) !important;
-
-    &:hover {
-      background-color: var(--cds-layer-hover-01) !important;
-    }
-  }
-
-  :global(.cds--btn__icon) {
-    fill: currentColor !important;
-  }
 }
 
-// Responsive Design
 @media (max-width: 66rem) {
   .infoPanel {
     position: static;
