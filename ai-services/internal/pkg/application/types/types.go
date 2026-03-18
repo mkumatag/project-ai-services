@@ -11,6 +11,7 @@ type CreateOptions struct {
 	// Common
 	Name         string
 	TemplateName string
+	VariantName  string
 	SkipChecks   []string
 	ArgParams    map[string]string
 

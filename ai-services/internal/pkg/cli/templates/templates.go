@@ -17,6 +17,13 @@ type AppMetadata struct {
 	SMTLevel              *int             `yaml:"smtLevel,omitempty"`
 	PodTemplateExecutions [][]string       `yaml:"podTemplateExecutions"`
 	Openshift             OpenshiftRuntime `yaml:"openshift,omitempty"`
+	Variants              []Variant        `yaml:"variants,omitempty"`
+}
+
+type Variant struct {
+	Name        string `yaml:"name,omitempty"`
+	Description string `yaml:"description,omitempty"`
+	Default     bool   `yaml:"default,omitempty"`
 }
 
 type OpenshiftRuntime struct {
@@ -70,4 +77,6 @@ type Template interface {
 	LoadChart(app string) (chart.Charter, error)
 	// LoadYamls loads the yaml in assests dir
 	LoadYamls() ([][]byte, error)
+	// ResolveVariantTemplate resolves the actual template name based on the variant
+	ResolveVariantTemplate(templateName, variantName string) (string, error)
 }

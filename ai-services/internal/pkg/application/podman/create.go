@@ -37,21 +37,30 @@ var (
 
 // Create deploys a new application based on a template.
 func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions) error {
+	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
+
+	// Resolve variant to actual template name
+	resolvedTemplateName, err := tp.ResolveVariantTemplate(opts.TemplateName, opts.VariantName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve variant: %w", err)
+	}
+
+	// Update opts with resolved template name
+	opts.TemplateName = resolvedTemplateName
+
 	// Proceed to create application
 	logger.Infof("Creating application '%s' using template '%s'\n", opts.Name, opts.TemplateName)
 
 	// set SMT level to target value
 	s := spinner.New("Checking SMT level")
 	s.Start(ctx)
-	err := p.setSMTLevel(opts.TemplateName)
+	err = p.setSMTLevel(opts.TemplateName)
 	if err != nil {
 		s.Fail("failed to set SMT level")
 
 		return fmt.Errorf("failed to set SMT level: %w", err)
 	}
 	s.Stop("SMT level configured successfully")
-
-	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
 
 	// validate whether the provided template name is correct
 	if err := validators.ValidateAppTemplateExist(tp, opts.TemplateName); err != nil {

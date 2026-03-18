@@ -240,6 +240,66 @@ func (e *embedTemplateProvider) LoadMetadata(app string, isRuntime bool) (*AppMe
 	return &appMetadata, nil
 }
 
+// ResolveVariantTemplate resolves the actual template name based on the variant.
+// If variant is specified and exists, it returns the variant-specific template name.
+// If variant is not specified, it returns the default variant or the original template.
+// Returns the resolved template name and any error encountered.
+func (e *embedTemplateProvider) ResolveVariantTemplate(templateName, variantName string) (string, error) {
+	// Load the base template metadata
+	metadata, err := e.LoadMetadata(templateName, false)
+	if err != nil {
+		return "", fmt.Errorf("failed to load template metadata: %w", err)
+	}
+
+	// If no variants are defined, return the original template name
+	if len(metadata.Variants) == 0 {
+		if variantName != "" {
+			return "", fmt.Errorf("template '%s' does not support variants", templateName)
+		}
+		return templateName, nil
+	}
+
+	// If variant is not specified, find and use the default variant
+	if variantName == "" {
+		for _, variant := range metadata.Variants {
+			if variant.Default {
+				variantName = variant.Name
+				break
+			}
+		}
+		// If no default variant found, use the first one
+		if variantName == "" && len(metadata.Variants) > 0 {
+			variantName = metadata.Variants[0].Name
+		}
+	}
+
+	// Validate that the variant exists
+	variantExists := false
+	for _, variant := range metadata.Variants {
+		if variant.Name == variantName {
+			variantExists = true
+			break
+		}
+	}
+
+	if !variantExists {
+		return "", fmt.Errorf("variant '%s' not found for template '%s'", variantName, templateName)
+	}
+
+	// Check if variant-specific template exists (e.g., rag-dev for dev variant)
+	variantTemplateName := templateName + "-" + variantName
+	variantPath := path.Join(e.root, variantTemplateName, "metadata.yaml")
+
+	if _, err := e.fs.ReadFile(variantPath); err == nil {
+		// Variant-specific template exists
+		return variantTemplateName, nil
+	}
+
+	// If variant-specific template doesn't exist, return the base template
+	// This allows variants to be configuration-only (different values.yaml)
+	return templateName, nil
+}
+
 // LoadMdFiles loads all md files for a given application.
 func (e *embedTemplateProvider) LoadMdFiles(app string) (map[string]*template.Template, error) {
 	tmpls := make(map[string]*template.Template)

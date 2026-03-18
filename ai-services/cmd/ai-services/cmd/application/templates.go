@@ -55,6 +55,21 @@ var templatesCmd = &cobra.Command{
 				logger.Infof("  Description: %s", metadata.Description)
 			}
 
+			// Display available variants if any
+			if len(metadata.Variants) > 0 {
+				logger.Infoln("\n  Available Variants:")
+				for _, variant := range metadata.Variants {
+					defaultMarker := ""
+					if variant.Default {
+						defaultMarker = " (default)"
+					}
+					logger.Infof("\t- %s%s", variant.Name, defaultMarker)
+					if variant.Description != "" {
+						logger.Infof("\t  %s", variant.Description)
+					}
+				}
+			}
+
 			logger.Infoln("\n  Supported Parameters:")
 			if len(appTemplatesParametersWithDescription) == 0 {
 				logger.Infoln("\t" + "NONE")

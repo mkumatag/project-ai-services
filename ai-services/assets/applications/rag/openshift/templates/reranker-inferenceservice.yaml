@@ -20,6 +20,10 @@ spec:
     model:
       modelFormat:
         name: vLLM
+      {{- if eq .Values.variant "dev" }}
+      resources: {}
+      runtime: cpu-temp
+      {{- else }}
       env:
         - name: VLLM_SPYRE_WARMUP_BATCH_SIZES
           value: "4"
@@ -31,7 +35,10 @@ spec:
         requests:
           ibm.com/spyre_pf: "1"
       runtime: spyre-temp
+      {{- end }}
       storageUri: {{ .Values.reranker.storageUri }}
       args:
       - --served-model-name=BAAI/bge-reranker-v2-m3
+      {{- if eq .Values.variant "production" }}
       - -tp 1
+      {{- end }}

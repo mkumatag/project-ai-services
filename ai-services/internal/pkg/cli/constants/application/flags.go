@@ -5,6 +5,7 @@ type CreateFlags struct {
 	// Common flags - valid for all runtimes
 	SkipValidation string
 	Template       string
+	Variant        string
 	Params         string
 	Values         string
 
@@ -22,6 +23,7 @@ var Create = CreateFlags{
 	// Common flags - valid for all runtimes
 	SkipValidation: "skip-validation",
 	Template:       "template",
+	Variant:        "variant",
 	Params:         "params",
 	Values:         "values",
 

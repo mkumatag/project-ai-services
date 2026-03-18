@@ -26,6 +26,7 @@ import (
 var (
 	// common flags.
 	templateName string
+	variantName  string
 	rawArgParams []string
 	argParams    map[string]string
 
@@ -80,6 +81,7 @@ var createCmd = &cobra.Command{
 		opts := appTypes.CreateOptions{
 			Name:              appName,
 			TemplateName:      templateName,
+			VariantName:       variantName,
 			SkipModelDownload: skipModelDownload,
 			SkipImageDownload: skipImageDownload,
 			ArgParams:         argParams,
@@ -120,6 +122,12 @@ func initCreateCommonFlags() {
 
 	createCmd.Flags().StringVarP(&templateName, appFlags.Create.Template, "t", "", "Application template to use (required)")
 	_ = createCmd.MarkFlagRequired(appFlags.Create.Template)
+
+	createCmd.Flags().StringVar(&variantName, appFlags.Create.Variant, "", "Application variant to use (optional)\n\n"+
+		"Variants allow you to choose different configurations of the same application.\n"+
+		"For example, 'production' variant might use GPU acceleration while 'dev' uses CPU.\n\n"+
+		"If not specified, the default variant will be used.\n"+
+		"Use \"ai-services application templates\" to view available variants for each template.\n")
 
 	createCmd.Flags().StringSliceVar(
 		&rawArgParams,
@@ -219,6 +227,7 @@ func buildFlagValidator() *flagvalidator.FlagValidator {
 	builder.
 		AddCommonFlag(appFlags.Create.SkipValidation, validateSkipChecksFlag).
 		AddCommonFlag(appFlags.Create.Template, validateTemplateFlag).
+		AddCommonFlag(appFlags.Create.Variant, validateVariantFlag).
 		AddCommonFlag(appFlags.Create.Params, validateParamsFlag).
 		AddCommonFlag(appFlags.Create.Values, validateValuesFlag)
 
@@ -240,6 +249,42 @@ func validateTemplateFlag(cmd *cobra.Command) error {
 	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
 	if err := validators.ValidateAppTemplateExist(tp, templateName); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateVariantFlag validates the variant flag.
+func validateVariantFlag(cmd *cobra.Command) error {
+	if variantName == "" {
+		// Variant is optional, so empty is valid
+		return nil
+	}
+
+	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
+
+	// Load metadata to check if variant exists
+	appMetadata, err := tp.LoadMetadata(templateName, false)
+	if err != nil {
+		return fmt.Errorf("failed to load template metadata: %w", err)
+	}
+
+	// Check if template has variants defined
+	if len(appMetadata.Variants) == 0 {
+		return fmt.Errorf("template '%s' does not support variants", templateName)
+	}
+
+	// Validate that the specified variant exists
+	variantExists := false
+	for _, variant := range appMetadata.Variants {
+		if variant.Name == variantName {
+			variantExists = true
+			break
+		}
+	}
+
+	if !variantExists {
+		return fmt.Errorf("variant '%s' not found for template '%s'", variantName, templateName)
 	}
 
 	return nil

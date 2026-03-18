@@ -17,9 +17,18 @@ import (
 )
 
 func (o *OpenshiftApplication) Create(ctx context.Context, opts types.CreateOptions) error {
-	logger.Infof("Creating application '%s' using template '%s'\n", opts.Name, opts.TemplateName)
-
 	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{Runtime: vars.RuntimeFactory.GetRuntimeType()})
+
+	// Resolve variant to actual template name
+	resolvedTemplateName, err := tp.ResolveVariantTemplate(opts.TemplateName, opts.VariantName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve variant: %w", err)
+	}
+
+	// Update opts with resolved template name
+	opts.TemplateName = resolvedTemplateName
+
+	logger.Infof("Creating application '%s' using template '%s'\n", opts.Name, opts.TemplateName)
 
 	// Step1: Fetch the operation timeout
 	timeout, err := getOperationTimeout(ctx, tp, opts)
