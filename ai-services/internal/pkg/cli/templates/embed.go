@@ -16,6 +16,7 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/models"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/validator"
 
 	"go.yaml.in/yaml/v3"
 	"helm.sh/helm/v4/pkg/chart"
@@ -181,6 +182,12 @@ func (e *embedTemplateProvider) LoadValues(app string, valuesFileOverrides []str
 		return nil, fmt.Errorf("failed to parse values.yaml: %w", err)
 	}
 
+	// Parse validation rules from values.yaml
+	validatorConfig, err := validator.ParseValidators(valuesData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse validators: %w", err)
+	}
+
 	// Load user provided file overrides and validate them
 	for _, overridePath := range valuesFileOverrides {
 		overrideData, err := os.ReadFile(overridePath)
@@ -211,6 +218,11 @@ func (e *embedTemplateProvider) LoadValues(app string, valuesFileOverrides []str
 	// Load user provided CLI overides
 	for key, val := range cliOverrides {
 		utils.SetNestedValue(values, key, val)
+	}
+
+	// Validate final values against validation rules
+	if err := validatorConfig.ValidateValues(values); err != nil {
+		return nil, fmt.Errorf("value validation failed: %w", err)
 	}
 
 	return values, nil

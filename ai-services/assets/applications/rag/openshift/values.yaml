@@ -44,9 +44,17 @@ opensearch:
   # @hidden
   image: icr.io/ppc64le-oss/opensearch-ppc64le:3.3.0
   # @description Sets the memory limit for the Opensearch service(Default: 4Gi). Override by passing a value with a unit suffix (e.g., Mi, Gi).
+  # @validator pattern: ^[0-9]+(\.[0-9]+)?(Mi|Gi|Ti)$
+  # @validator required: true
   memoryLimit: 4Gi
   # @description Sets the storage limit for the Opensearch service(Default: 10Gi). Override by passing a value with a unit suffix (e.g., Mi, Gi).
+  # @validator pattern: ^[0-9]+(\.[0-9]+)?(Mi|Gi|Ti)$
+  # @validator required: true
   storage: 10Gi
   auth:
+    # @validator required: true
+    # @validator minLength: 3
     username: "admin"
+    # @validator required: true
+    # @validator minLength: 8
     password: "AiServices@1234"
