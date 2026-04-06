@@ -143,6 +143,8 @@ func (e *embedTemplateProvider) LoadAllTemplates(app string) (map[string]*templa
 }
 
 // LoadPodTemplate loads and renders a pod template with the given parameters.
+// Note: This function returns a PodSpec even for non-Pod resources (like Secrets).
+// The Kind field in the returned PodSpec should be checked to determine the actual resource type.
 func (e *embedTemplateProvider) LoadPodTemplate(app, file string, params any) (*models.PodSpec, error) {
 	path := fmt.Sprintf("%s/%s/%s/templates/%s", e.root, app, e.Runtime(), file)
 	data, err := e.fs.ReadFile(path)
@@ -159,9 +161,18 @@ func (e *embedTemplateProvider) LoadPodTemplate(app, file string, params any) (*
 		return nil, fmt.Errorf("failed to execute template %s: %v", path, err)
 	}
 
+	// Parse as generic Kubernetes resource to detect the kind early
+	var genericResource struct {
+		Kind string `yaml:"kind"`
+	}
+	if err := k8syaml.Unmarshal(rendered.Bytes(), &genericResource); err != nil {
+		return nil, fmt.Errorf("unable to read YAML to detect resource kind: %w", err)
+	}
+
+	// Always parse as PodSpec for backward compatibility, but the Kind field will indicate the actual type
 	var spec models.PodSpec
 	if err := k8syaml.Unmarshal(rendered.Bytes(), &spec); err != nil {
-		return nil, fmt.Errorf("unable to read YAML as Kube Pod: %w", err)
+		return nil, fmt.Errorf("unable to read YAML as Kube resource: %w", err)
 	}
 
 	return &spec, nil

@@ -74,13 +74,20 @@ func extractPodIDsFromOutput(output string) []string {
 			// Skip line with Pod prefix
 			continue
 		}
+		if strings.HasPrefix(line, "Secret") {
+			// Skip line with Secret prefix (for Secret resources)
+			continue
+		}
 		if strings.HasPrefix(line, "Container") {
 			// Break if we encounter Container prefix as it means we have collected the podIDs
 			break
 		}
 		// Read all the pod ids
 		id := strings.TrimSpace(line)
-		ids = append(ids, id)
+		// Only add non-empty IDs
+		if id != "" {
+			ids = append(ids, id)
+		}
 	}
 
 	return ids

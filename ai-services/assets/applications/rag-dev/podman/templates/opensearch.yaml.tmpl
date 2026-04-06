@@ -25,7 +25,10 @@ spec:
         - name: "discovery.type"
           value: "single-node"
         - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
-          value: "{{ .Values.opensearch.auth.password }}"
+          valueFrom:
+            secretKeyRef:
+              name: "{{ .AppName }}--opensearch-credentials"
+              key: password
         - name: OPENSEARCH_JAVA_OPTS
           value: "-Xms4g -Xmx4g -XX:MaxDirectMemorySize=2g -XX:-UseSuperWord -XX:TieredStopAtLevel=1"
         
@@ -45,14 +48,18 @@ spec:
       volumeMounts:
         - mountPath: /usr/share/opensearch/data:z
           name: opensearch-data
+        - name: opensearch-credentials
+          mountPath: /run/secrets
+          readOnly: true
       livenessProbe:
         exec:
           command:
-          - curl
-          - -fk
-          - -u
-          - {{ .Values.opensearch.auth.username }}:{{ .Values.opensearch.auth.password }}
-          - https://localhost:9200/_cluster/health
+          - /bin/sh
+          - -c
+          - |
+            USERNAME=$(cat /run/secrets/opensearch-username)
+            PASSWORD=$(cat /run/secrets/opensearch-password)
+            curl -fk -u "$USERNAME:$PASSWORD" https://localhost:9200/_cluster/health
         initialDelaySeconds: 90
         periodSeconds: 30
         timeoutSeconds: 20
@@ -63,3 +70,11 @@ spec:
       hostPath:
         path: "/var/lib/ai-services/applications/{{ .AppName }}/volumes/opensearch"
         type: DirectoryOrCreate
+    - name: opensearch-credentials
+      secret:
+        secretName: "{{ .AppName }}--opensearch-credentials"
+        items:
+          - key: username
+            path: opensearch-username
+          - key: password
+            path: opensearch-password

@@ -475,41 +475,55 @@ func (p *PodmanApplication) executePodTemplateLayer(tp templates.Template, tmpls
 	// Shallow Copy globalParams Map
 	params := utils.CopyMap(globalParams)
 
-	// fetch pod Spec
-	podSpec, err := p.fetchPodSpec(tp, globalParams["AppTemplateName"].(string), podTemplateName, appName, valuesFiles, argParams)
+	// fetch resource spec (could be Pod, Secret, etc.)
+	resourceSpec, err := p.fetchPodSpec(tp, globalParams["AppTemplateName"].(string), podTemplateName, appName, valuesFiles, argParams)
 	if err != nil {
 		return err
 	}
 
-	if slices.Contains(existingPods, podSpec.Name) {
-		logger.Infof("%s: Skipping pod deploy as '%s' it already exists", podTemplateName, podSpec.Name)
+	// Check the resource kind early to determine how to handle it
+	resourceKind := resourceSpec.Kind
+	if resourceKind == "" {
+		resourceKind = "Pod" // Default to Pod for backward compatibility
+	}
+
+	// For non-Pod resources (like Secret), we handle them differently
+	isSecret := resourceKind == "Secret"
+
+	if !isSecret && slices.Contains(existingPods, resourceSpec.Name) {
+		logger.Infof("%s: Skipping pod deploy as '%s' it already exists", podTemplateName, resourceSpec.Name)
 
 		return nil
 	}
 
-	// fetch annotations from pod Spec
-	podAnnotations := p.fetchPodAnnotations(podSpec)
-
-	// get the env params for a given pod
-	env, err := p.returnEnvParamsForPod(podSpec, podAnnotations, &pciAddresses)
-	if err != nil {
-		return fmt.Errorf("'%s': Failed to fetch env params: %w", podTemplateName, err)
+	// fetch annotations from resource Spec (only applicable for Pods)
+	var podAnnotations map[string]string
+	if !isSecret {
+		podAnnotations = p.fetchPodAnnotations(resourceSpec)
 	}
-	params["env"] = env
+
+	// get the env params for a given pod (only applicable for Pods)
+	if !isSecret {
+		env, err := p.returnEnvParamsForPod(resourceSpec, podAnnotations, &pciAddresses)
+		if err != nil {
+			return fmt.Errorf("'%s': Failed to fetch env params: %w", podTemplateName, err)
+		}
+		params["env"] = env
+	}
 
 	podTemplate := tmpls[podTemplateName]
 
 	var rendered bytes.Buffer
 	if err := podTemplate.Execute(&rendered, params); err != nil {
-		return fmt.Errorf("'%s': Failed to parse pod template: %w", podTemplateName, err)
+		return fmt.Errorf("'%s': Failed to parse template: %w", podTemplateName, err)
 	}
 
 	// Wrap the bytes in a bytes.Reader
 	reader := bytes.NewReader(rendered.Bytes())
 
-	// Deploy the Pod and do Readiness check
-	if err := p.deployPodAndReadinessCheck(podSpec, podTemplateName, reader, p.constructPodDeployOptions(podAnnotations)); err != nil {
-		return fmt.Errorf("'%s': Failed to deploy pod and do readiness check: %w", podTemplateName, err)
+	// Deploy the resource and do Readiness check (only for Pods)
+	if err := p.deployResourceAndReadinessCheck(resourceSpec, podTemplateName, reader, p.constructPodDeployOptions(podAnnotations), isSecret); err != nil {
+		return fmt.Errorf("'%s': Failed to deploy resource and do readiness check: %w", podTemplateName, err)
 	}
 
 	return nil
@@ -554,12 +568,27 @@ func (p *PodmanApplication) returnEnvParamsForPod(podSpec *models.PodSpec, podAn
 
 func (p *PodmanApplication) deployPodAndReadinessCheck(podSpec *models.PodSpec,
 	podTemplateName string, body io.Reader, opts map[string]string) error {
+	return p.deployResourceAndReadinessCheck(podSpec, podTemplateName, body, opts, false)
+}
+
+func (p *PodmanApplication) deployResourceAndReadinessCheck(resourceSpec *models.PodSpec,
+	templateName string, body io.Reader, opts map[string]string, isSecret bool) error {
 	pods, err := podman.RunPodmanKubePlay(body, opts)
 	if err != nil {
-		return fmt.Errorf("failed pod creation: %w", err)
+		return fmt.Errorf("failed resource creation: %w", err)
 	}
 
-	logger.Infof("'%s': Successfully ran podman kube play\n", podTemplateName, logger.VerbosityLevelDebug)
+	logger.Infof("'%s': Successfully ran podman kube play\n", templateName, logger.VerbosityLevelDebug)
+
+	// If this is a Secret or no pods were returned, skip readiness checks
+	if isSecret || len(pods) == 0 {
+		if isSecret {
+			logger.Infof("'%s': Secret resource deployed successfully (no readiness check needed)\n", templateName)
+		} else {
+			logger.Infof("'%s': No pods to check readiness for (likely a non-pod resource)\n", templateName)
+		}
+		return nil
+	}
 
 	// ---- Pod Readiness Checks ----
 	for _, pod := range pods {
@@ -570,21 +599,21 @@ func (p *PodmanApplication) deployPodAndReadinessCheck(podSpec *models.PodSpec,
 
 		podName := pInfo.Name
 
-		logger.Infof("'%s', '%s': Starting Pod Readiness check...\n", podTemplateName, podName)
+		logger.Infof("'%s', '%s': Starting Pod Readiness check...\n", templateName, podName)
 
 		// Step1: ---- Containers Creation Check ----
-		if err := p.doContainersCreationCheck(podSpec, podTemplateName, pInfo.Name, pInfo.ID); err != nil {
+		if err := p.doContainersCreationCheck(resourceSpec, templateName, pInfo.Name, pInfo.ID); err != nil {
 			return err
 		}
 
 		// Step2: ---- Containers Readiness Check ----
 		for _, container := range pInfo.Containers {
-			if err := p.doContainerReadinessCheck(podTemplateName, pInfo.Name, container.ID); err != nil {
+			if err := p.doContainerReadinessCheck(templateName, pInfo.Name, container.ID); err != nil {
 				return err
 			}
 			logger.Infoln("-------")
 		}
-		logger.Infof("'%s', '%s': Pod has been successfully deployed and ready!\n", podTemplateName, podName)
+		logger.Infof("'%s', '%s': Pod has been successfully deployed and ready!\n", templateName, podName)
 		logger.Infoln("-------")
 	}
 
