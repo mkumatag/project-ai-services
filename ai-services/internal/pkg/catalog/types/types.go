@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	// yamlMappingKeyValuePairs represents that YAML mapping nodes store content as key-value pairs
+	// yamlMappingKeyValuePairs represents that YAML mapping nodes store content as key-value pairs.
 	yamlMappingKeyValuePairs = 2
 )
 
