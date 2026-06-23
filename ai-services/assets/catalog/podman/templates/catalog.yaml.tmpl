@@ -6,9 +6,60 @@ metadata:
     ai-services.io/application: "{{ .AppName }}"
     ai-services.io/template: "{{ .AppTemplateName }}"
     ai-services.io/version: "{{ .Version }}"
+    ai-services.io/secret: "catalog-secret"
+    ai-services.io/volume: "podman-auth-secret"
   annotations:
-    ai-services.io/ports: "{{ .Values.ui.port }}:8081"
+    run.oci.keep_original_groups: "1"
+    ai-services.io/routes: "8081:catalog-ui:ui, 8080:catalog-api:api"
+    # ai-services.io/ports: "{{ .Values.ui.port }}:8081, {{ .Values.backend.port }}:8080"  # Uncomment to expose ports directly (bypasses Caddy)
 spec:
+  restartPolicy: always
+  initContainers:
+    - name: db-migration
+      image: "{{ .Values.backend.image }}"
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e  # Exit immediately if any command fails
+
+          max_retries=5
+          retry_delay=5
+
+          echo "Running database migrations with retry logic..."
+          for attempt in $(seq 1 $max_retries); do
+            echo "Migration attempt $attempt of $max_retries..."
+
+            if /usr/bin/ai-services catalog dbmigrate init \
+              --runtime={{ .Values.backend.runtime }} \
+              --db-host={{ .AppName }}--db \
+              --db-port=5432 \
+              --db-user={{ .Values.db.user }} \
+              --db-password="${DB_PASSWORD}" \
+              --db-name={{ .Values.db.database }} \
+              --db-sslmode=disable; then
+              echo "Migrations completed successfully"
+              exit 0
+            fi
+
+            if [ $attempt -lt $max_retries ]; then
+              echo "Migration failed, retrying in ${retry_delay} seconds..."
+              sleep $retry_delay
+            else
+              echo "ERROR: Migration failed after $max_retries attempts"
+              exit 1
+            fi
+          done
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: catalog-db-secret
+              key: db-password
+      resources:
+        requests:
+          memory: "512Mi"
+        limits:
+          memory: "512Mi"
   containers:
     - name: ui
       image: "{{ .Values.ui.image }}"
@@ -21,7 +72,7 @@ spec:
         - name: BACKEND_HOST
           value: "{{ .AppName }}--catalog"
         - name: BACKEND_PORT
-          value: "8080" 
+          value: "8080"
       ports:
         - containerPort: 8081
           protocol: TCP
@@ -35,36 +86,72 @@ spec:
         failureThreshold: 3
     - name: backend
       image: "{{ .Values.backend.image }}"
+      securityContext:
+        seLinuxOptions:
+          {{- if eq .Values.backend.podman.uri "/run/podman/podman.sock" }}
+          type: ai_services_root.process
+          {{- else }}
+          type: ai_services_nonroot.process
+          {{- end }}
       command: ["/bin/sh", "-c"]
       args:
         - "/usr/bin/ai-services catalog apiserver --port=8080 --admin-username=admin --admin-password-hash=${ADMIN_PASSWORD} --runtime={{ .Values.backend.runtime }}"
-      securityContext:
-        seLinuxOptions:
-          type: "spc_t"
       env:
+        - name: AI_SERVICES_LOG_LEVEL
+          value: "info"
+        - name: AI_SERVICES_LOG_FORMAT
+          value: "service"
         - name: CONTAINER_HOST
           value: "unix://{{ .Values.backend.podman.uri }}"
+        - name: REGISTRY_AUTH_FILE
+          value: "/run/containers/auth.json"
         - name: ADMIN_PASSWORD
           valueFrom:
             secretKeyRef:
               name: catalog-secret
               key: admin-password
+        - name: DB_HOST
+          value: {{ .AppName }}--db
+        - name: DB_PORT
+          value: "5432"
         - name: DB_USER
           value: "{{ .Values.db.user }}"
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: catalog-secret
+              name: catalog-db-secret
               key: db-password
+        - name: AI_SERVICES_BASE_DIR
+          value: "{{ .BaseDir }}"
+        - name: CADDY_ADMIN_URL
+          value: "{{ .CaddyAdminURL }}"
+        - name: CADDY_HTTPS_PORT
+          value: "{{ .Values.caddy.httpsPort }}"
+        - name: DOMAIN_SUFFIX
+          value: "{{ .DomainSuffix }}"
       ports:
         - containerPort: 8080
           protocol: TCP
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 3
       volumeMounts:
         - name: podman-socket
           mountPath: {{ .Values.backend.podman.uri }}
+        - name: podman-auth
+          mountPath: /run/containers/auth.json
+          subPath: auth.json
+          readOnly: true
         - name: iommu-groups
           mountPath: /sys/kernel/iommu_groups
           readOnly: true
+        - name: ai-services-data
+          mountPath: {{ .BaseDir }}
       resources:
         requests:
           podman.io/device=/dev/vfio: 4
@@ -78,7 +165,14 @@ spec:
         # For root podman: /run/podman/podman.sock
         path: {{ .Values.backend.podman.uri }}
         type: Socket
+    - name: podman-auth
+      secret:
+        secretName: podman-auth-secret
     - name: iommu-groups
       hostPath:
         path: /sys/kernel/iommu_groups
         type: Directory
+    - name: ai-services-data
+      hostPath:
+        path: {{ .BaseDir }}
+        type: DirectoryOrCreate

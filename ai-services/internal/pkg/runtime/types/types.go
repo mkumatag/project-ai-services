@@ -29,6 +29,7 @@ type Pod struct {
 	ID               string
 	Name             string
 	Status           string
+	Health           string
 	Labels           map[string]string
 	Containers       []Container
 	Created          time.Time
@@ -43,6 +44,7 @@ type Container struct {
 	Status                 string
 	Health                 string
 	Annotations            map[string]string
+	Env                    map[string]string
 	HealthcheckStartPeriod time.Duration
 }
 
@@ -55,4 +57,11 @@ type Route struct {
 	Name       string
 	HostPort   string
 	TargetPort string
+}
+
+// PodResources represents resource allocation and usage for a pod including accelerators.
+type PodResources struct {
+	CPUCores   float64  // CPU usage in cores (e.g., 1.5 cores)
+	MemUsage   uint64   // Memory usage in bytes
+	SpyreCards []string // List of Spyre card PCI addresses
 }

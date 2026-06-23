@@ -3,6 +3,7 @@ package runtime
 import (
 	"io"
 
+	"github.com/project-ai-services/ai-services/internal/pkg/models"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 )
 
@@ -20,6 +21,16 @@ type Runtime interface {
 	InspectPod(nameOrId string) (*types.Pod, error)
 	PodExists(nameOrID string) (bool, error)
 	PodLogs(nameOrID string) error
+	GetPodResources(nameOrID string) (*types.PodResources, error)
+
+	// Secret operations
+	ListSecrets(filters map[string][]string) ([]string, error)
+	DeleteSecret(name string) error
+	SecretExists(nameOrID string) (bool, error)
+
+	// Volume operations
+	DeleteVolume(name string) error
+	VolumeExists(nameOrID string) (bool, error)
 
 	// Container operations
 	// ListContainers(filters map[string][]string) ([]types.Container, error)
@@ -32,6 +43,9 @@ type Runtime interface {
 
 	// PVC operations
 	DeletePVCs(appLabel string) error
+
+	// System information
+	GetSystemInfo() (*models.SystemInfo, error)
 
 	// Runtime type identification
 	Type() types.RuntimeType

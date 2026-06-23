@@ -1,0 +1,340 @@
+import { UserType } from '@carbon/ai-chat';
+import axios from 'axios';
+import { OpenAI } from 'openai';
+import { DEFAULT_CONFIG } from '../config/chatbotConfig.js';
+
+// Helper function to escape HTML entities to prevent rendering issues with angle brackets
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function customSendMessage(
+  request,
+  _options,
+  instance,
+  apiKey,
+  onAuthError,
+  conversationHistory,
+  setConversationHistory,
+) {
+  const userInput = request.input.text;
+
+  // Create OpenAI client with the provided API key
+  const client = new OpenAI({
+    baseURL: window.location.origin + '/v1',
+    apiKey: apiKey || 'not-needed',
+    dangerouslyAllowBrowser: true, // Required for browser-side use to allow api-key
+  });
+
+  try {
+    const res = await axios.get('/db-status');
+    if (res.data.ready === false) {
+      await instance.messaging.addMessage({
+        output: {
+          generic: [
+            {
+              response_type: 'text',
+              text: '⚠️ The knowledge database is not ready. Please ingest documents first.',
+            },
+          ],
+        },
+        message_options: {
+          response_user_profile: {
+            id: 'assistant',
+            nickname: 'Assistant',
+            user_type: UserType.BOT,
+          },
+        },
+      });
+      return;
+    }
+  } catch {
+    // No action needed
+  }
+
+  const ResponseUserProfile = {
+    id: 'assistant',
+    nickname: 'Assistant',
+    user_type: UserType.BOT,
+  };
+
+  function finalizeResponse(fullText) {
+    return fullText.trim();
+  }
+
+  if (userInput === '') {
+    if (
+      instance.messaging &&
+      instance.messaging.addMessage &&
+      typeof instance.messaging.addMessage === 'function'
+    ) {
+      // sendWelcomeMessage(instance);
+      return;
+    }
+  }
+  const responseId = String(Date.now()); // or any unique ID
+  const itemId = '1'; // single item per response, or generate if multiple
+
+  //Adding initial partial chunk (this triggers the bubble with "stop streaming" button)
+  await instance.messaging.addMessageChunk({
+    partial_item: {
+      response_type: 'text',
+      text: '', // start empty
+      streaming_metadata: {
+        id: itemId,
+        cancellable: true,
+      },
+    },
+    streaming_metadata: {
+      response_id: responseId,
+    },
+    partial_response: {
+      message_options: {
+        response_user_profile: ResponseUserProfile,
+      },
+    },
+  });
+
+  // Update conversation history with user input first
+  const updatedHistory = [
+    ...conversationHistory,
+    { role: 'user', content: userInput },
+  ];
+
+  // Apply sliding window: keep only last 10 messages for API payload
+  const SLIDING_WINDOW_SIZE = 10;
+  const recentMessages = updatedHistory.slice(-SLIDING_WINDOW_SIZE);
+
+  const payload = {
+    messages: recentMessages,
+    model: 'ibm-granite/granite-3.3-8b-instruct',
+    temperature: 0.0,
+    stream: true,
+  };
+
+  let isCanceled = false;
+  const abortHandler = () => {
+    isCanceled = true;
+  };
+  // Listen to abort signal (handles stop button, restart/clear, and timeout)
+  _options.signal?.addEventListener('abort', abortHandler);
+
+  try {
+    instance.updateIsMessageLoadingCounter('increase');
+
+    // Make the streaming request using OpenAI client with withResponse to access headers
+    const { data: stream, response } = await client.chat.completions
+      .create(payload)
+      .withResponse();
+
+    // Extract rephrased query from response headers
+    const rephrasedQuery =
+      response.headers.get('x-rephrased-query') || userInput;
+
+    instance.updateIsMessageLoadingCounter('decrease');
+
+    let fullText = ''; // to accumulate final message
+
+    for await (const chunk of stream) {
+      if (isCanceled) break;
+
+      const textChunk = chunk.choices[0]?.delta?.content || '';
+
+      if (textChunk) {
+        fullText += textChunk;
+
+        await instance.messaging.addMessageChunk({
+          partial_item: {
+            response_type: 'text',
+            text: escapeHtml(textChunk),
+            streaming_metadata: {
+              id: itemId,
+              cancellable: true,
+            },
+          },
+          streaming_metadata: {
+            response_id: responseId,
+          },
+          partial_response: {
+            message_options: {
+              response_user_profile: ResponseUserProfile,
+            },
+          },
+        });
+      }
+    }
+
+    fullText = finalizeResponse(fullText);
+    // Complete item chunk (used if we want to replace bubble content at end)
+    await instance.messaging.addMessageChunk({
+      complete_item: {
+        response_type: 'text',
+        text: escapeHtml(fullText),
+        streaming_metadata: {
+          id: itemId,
+          stream_stopped: false,
+        },
+      },
+      streaming_metadata: {
+        response_id: responseId,
+      },
+      partial_response: {
+        message_options: {
+          response_user_profile: ResponseUserProfile,
+        },
+      },
+    });
+
+    // Now fetch reference docs using the rephrased query (or original if not rephrased)
+    let docs = [];
+    try {
+      // Fetch chatbot configuration from the config endpoint
+      let mode, topK, rerank;
+
+      try {
+        const configResponse = await axios.get('/config');
+        const config = configResponse.data;
+        mode = config.searchMode || DEFAULT_CONFIG.searchMode;
+        topK = parseInt(
+          config.numChunksPostReranker || String(DEFAULT_CONFIG.topK),
+          10,
+        );
+        rerank = config.rerank === 'true' || config.rerank === true;
+      } catch (configError) {
+        // If config fetch fails, use defaults from shared config
+        console.warn(
+          'Failed to fetch config, using defaults:',
+          configError.message,
+        );
+      }
+
+      const context_response = await axios.post('/v1/similarity-search', {
+        query: rephrasedQuery,
+        mode: mode,
+        top_k: topK,
+        rerank: rerank,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      // get docs out of context_response
+      docs = context_response.data?.results || [];
+    } catch (refError) {
+      // If reference call fails (e.g., query too long), continue without docs
+      // The chat response has already been streamed successfully
+      console.warn(
+        'Reference document retrieval failed:',
+        refError.response?.data?.detail || refError.message,
+      );
+    }
+
+    const responseBlocks = [
+      {
+        response_type: 'text',
+        text: escapeHtml(fullText),
+        streaming_metadata: {
+          id: itemId,
+          stream_stopped: false,
+        },
+      },
+    ];
+
+    // Only add reference docs button if docs were actually found
+    // AND the response doesn't indicate no documents were found
+    const noDocsMessages = [
+      'No documents found in the knowledge base for this query.',
+      'Für diese Anfrage wurden keine Dokumente in der Wissensdatenbank gefunden.',
+    ];
+    const hasNoDocsMessage = noDocsMessages.some((msg) =>
+      fullText.includes(msg),
+    );
+
+    if (docs && docs.length > 0 && !hasNoDocsMessage) {
+      responseBlocks.push({
+        response_type: 'user_defined',
+        user_defined: {
+          user_defined_type: 'reference_docs_button',
+          docs,
+          original_text: fullText,
+          button_label: 'Get reference documents',
+        },
+      });
+    }
+
+    // Final response (wraps the message in final format)
+    await instance.messaging.addMessageChunk({
+      final_response: {
+        id: responseId,
+        output: {
+          generic: responseBlocks,
+        },
+        message_options: {
+          response_user_profile: ResponseUserProfile,
+        },
+      },
+    });
+
+    // Update conversation history with assistant response
+    setConversationHistory([
+      ...updatedHistory,
+      { role: 'assistant', content: fullText },
+    ]);
+  } catch (err) {
+    instance.updateIsMessageLoadingCounter('decrease');
+
+    let errorMessage = '⚠️ Error occurred during active stream.';
+
+    // Handle authentication errors
+    if (
+      err.status === 401 ||
+      (err.error && err.error.code === 'AUTHENTICATION_FAILED')
+    ) {
+      errorMessage =
+        '⚠️ Authentication failed. Please provide a valid API key.';
+      // Trigger auth error callback to show API key dialog
+      if (onAuthError) {
+        setTimeout(() => onAuthError(), 1000);
+      }
+    }
+    // Handle specific HTTP status codes
+    else if (err.status === 429) {
+      errorMessage = '⚠️ Server busy. Try again shortly.';
+    } else if (err.status >= 500 && err.status < 600) {
+      errorMessage =
+        '⚠️ Something went wrong on the server. Please try again later.';
+    } else if (err.message) {
+      // Extract error message from exception
+      errorMessage = `⚠️ ${err.message}`;
+    } else if (err.error?.message) {
+      // Extract error from OpenAI error format
+      errorMessage = `⚠️ ${err.error.message}`;
+    }
+
+    await instance.messaging.addMessageChunk({
+      final_response: {
+        id: responseId,
+        output: {
+          generic: [
+            {
+              response_type: 'text',
+              text: errorMessage,
+              streaming_metadata: {
+                id: itemId,
+                stream_stopped: true,
+              },
+            },
+          ],
+        },
+        message_options: {
+          response_user_profile: ResponseUserProfile,
+        },
+      },
+    });
+  } finally {
+    _options.signal?.removeEventListener('abort', abortHandler);
+  }
+}
+
+export { customSendMessage };

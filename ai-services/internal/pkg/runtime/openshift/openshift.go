@@ -16,6 +16,7 @@ import (
 	routeclient "github.com/openshift/client-go/route/clientset/versioned"
 	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
+	"github.com/project-ai-services/ai-services/internal/pkg/models"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -361,7 +362,7 @@ func (kc *OpenshiftClient) DeletePVCs(appLabel string) error {
 			continue
 		}
 
-		logger.Infof("Deleted PVC '%s'\n", pvc.Name, logger.VerbosityLevelDebug)
+		logger.Debugf("Deleted PVC '%s'\n", pvc.Name)
 	}
 
 	return nil
@@ -421,4 +422,52 @@ func followLogs(kc *OpenshiftClient, podName string, opts *corev1.PodLogOptions)
 	}
 
 	return nil
+}
+
+func (kc *OpenshiftClient) ListSecrets(filters map[string][]string) ([]string, error) {
+	logger.Warningln("Not implemented")
+
+	return nil, nil
+}
+
+func (kc *OpenshiftClient) DeleteSecret(name string) error {
+	logger.Warningln("Not implemented")
+
+	return nil
+}
+
+func (kc *OpenshiftClient) SecretExists(nameOrID string) (bool, error) {
+	logger.Warningln("Not implemented")
+
+	return false, nil
+}
+
+func (kc *OpenshiftClient) DeleteVolume(name string) error {
+	logger.Warningln("Not implemented")
+
+	return nil
+}
+
+func (kc *OpenshiftClient) VolumeExists(nameOrID string) (bool, error) {
+	logger.Warningln("Not implemented")
+
+	return false, nil
+}
+
+// GetSystemInfo returns empty system information for OpenShift runtime.
+// Resource information is managed by Kubernetes/OpenShift and not directly accessible.
+func (kc *OpenshiftClient) GetSystemInfo() (*models.SystemInfo, error) {
+	return &models.SystemInfo{
+		Accelerators: make(map[string]*models.AcceleratorInfo),
+	}, nil
+}
+
+// GetPodResources retrieves resource usage and Spyre cards for a pod in a single call.
+// For OpenShift, this is not yet implemented and returns empty values.
+func (kc *OpenshiftClient) GetPodResources(nameOrID string) (*types.PodResources, error) {
+	return &types.PodResources{
+		CPUCores:   0,
+		MemUsage:   0,
+		SpyreCards: []string{},
+	}, nil
 }

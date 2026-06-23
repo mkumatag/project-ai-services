@@ -21,7 +21,17 @@ spec:
         - name: BACKEND_HOST
           value: "{{ .AppName  }}--chat-bot"
         - name: BACKEND_PORT
-          value: "5000" 
+          value: "5000"
+        - name: SIMILARITY_SEARCH_HOST
+          value: "{{ .AppName  }}--similarity-api"
+        - name: SIMILARITY_SEARCH_PORT
+          value: "7000"
+        - name: CHATBOT_SEARCH_MODE
+          value: "{{ .Values.chatbot.searchMode }}"
+        - name: CHATBOT_NUM_CHUNKS_POST_RERANKER
+          value: "{{ .Values.chatbot.numChunksPostReranker }}"
+        - name: CHATBOT_RERANK
+          value: "{{ .Values.chatbot.rerank }}"
       ports:
         - containerPort: 3000
           protocol: TCP
@@ -39,7 +49,7 @@ spec:
         - "/var/venv/bin/python"
         - "-m"
         - "uvicorn"
-        - "chatbot.app:app"
+        - "app:app"
         - "--host"
         - "0.0.0.0"
         - "--port"
@@ -52,17 +62,21 @@ spec:
         - name: EMB_ENDPOINT
           value: "http://{{ .AppName  }}--vllm-server:8001"
         - name: EMB_MODEL
-          value: "ibm-granite/granite-embedding-278m-multilingual"
-        - name: EMB_MAX_TOKENS
-          value: "512"
+          value: "{{ .Values.embedding.model.name }}"
+        - name: EMB_MAX_MODEL_LEN
+          value: "{{ .Values.embedding.model.maxModelLen }}"
         - name: LLM_ENDPOINT
           value: "http://{{ .AppName  }}--vllm-server:8000"
         - name: LLM_MODEL
-          value: "ibm-granite/granite-3.3-8b-instruct"
+          value: "{{ .Values.instruct.model.name }}"
+        - name: LLM_MAX_MODEL_LEN
+          value: "{{ .Values.instruct.model.maxModelLen }}"
+        - name: LLM_MAX_BATCH_SIZE
+          value: "{{ .Values.instruct.model.maxBatchSize }}"
         - name: RERANKER_ENDPOINT
           value: "http://{{ .AppName  }}--vllm-server:8002"
         - name: RERANKER_MODEL
-          value: "BAAI/bge-reranker-v2-m3"
+          value: "{{ .Values.reranker.model.name }}"
         - name: OPENSEARCH_HOST
           value: "{{ .AppName  }}--opensearch"
         - name: OPENSEARCH_PORT
@@ -79,6 +93,16 @@ spec:
           value: "1"
         - name: LOG_LEVEL
           value: "{{ .Values.backend.log_level}}"
+        - name: CHATBOT_SEARCH_MODE
+          value: "{{ .Values.chatbot.searchMode }}"
+        - name: CHATBOT_NUM_CHUNKS_POST_RERANKER
+          value: "{{ .Values.chatbot.numChunksPostReranker }}"
+        - name: CHATBOT_RERANK
+          value: "{{ .Values.chatbot.rerank }}"
+        - name: CHATBOT_SYSTEM_PROMPT
+          value: "{{ .Values.backend.systemPrompt }}"
+        - name: CHATBOT_SIMILARITY_SERVICE_URL
+          value: "http://{{ .AppName  }}--similarity-api:7000"
       ports:
         - containerPort: 5000
           protocol: TCP

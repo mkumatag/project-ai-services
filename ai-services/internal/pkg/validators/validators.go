@@ -14,20 +14,23 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/platform"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/power"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/rhn"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/root"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/slicelimits"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/spyre"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/ulimits"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/usergroup"
 )
 
 // Initialize the default registry with built-in rules.
 func init() {
 	// Podman checks
-	// adding root rule on top to verify this check first
-	PodmanRegistry.Register(root.NewRootRule())
 	PodmanRegistry.Register(numa.NewNumaRule())
 	PodmanRegistry.Register(platform.NewPlatformRule())
 	PodmanRegistry.Register(power.NewPowerRule())
 	PodmanRegistry.Register(rhn.NewRHNRule())
 	PodmanRegistry.Register(spyre.NewSpyreRule())
+	PodmanRegistry.Register(usergroup.NewUsergroupRule())
+	PodmanRegistry.Register(ulimits.NewUlimitsRule())
+	PodmanRegistry.Register(slicelimits.NewSliceLimitsRule())
 
 	// OpenshiftChecks
 	OpenshiftRegistry.Register(kubeconfig.NewKubeconfigRule())

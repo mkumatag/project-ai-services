@@ -1,0 +1,10 @@
+# Component identification
+type: component
+id: vllm-spyre
+name: "RedHat AI Inference with Spyre"
+description: "Deploy reranker models on vLLM inference engine"
+
+# Component type this provider belongs to
+component_type: reranker
+component_name: "Reranker model"
+default: true

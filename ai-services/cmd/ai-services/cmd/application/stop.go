@@ -5,12 +5,16 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application"
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
+	"github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 	"github.com/spf13/cobra"
 )
 
 var (
 	stopPodNames []string
+	legacyStop   bool
 )
 
 var stopCmd = &cobra.Command{
@@ -41,6 +45,17 @@ Note: Supported for podman runtime only.
 
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
+		// For podman runtime with default mode, validate application name using catalog API
+		if !legacyStop && rt == types.RuntimeTypePodman {
+			appClient, err := catalogClient.NewApplicationClient()
+			if err != nil {
+				return fmt.Errorf("failed to create application client: %w", err)
+			}
+			if _, err := utils.GetAppByName(appClient, applicationName); err != nil {
+				return err
+			}
+		}
+
 		// Create application instance using factory
 		factory := application.NewFactory(rt)
 		app, err := factory.Create(applicationName)
@@ -52,6 +67,7 @@ Note: Supported for podman runtime only.
 			Name:     applicationName,
 			PodNames: stopPodNames,
 			AutoYes:  autoYes,
+			Legacy:   legacyStop,
 		}
 
 		return app.Stop(opts)
@@ -61,4 +77,5 @@ Note: Supported for podman runtime only.
 func init() {
 	stopCmd.Flags().StringSlice("pod", []string{}, "Specific pod name(s) to stop (optional)\nCan be specified multiple times: --pod pod1 --pod pod2\nOr comma-separated: --pod pod1,pod2")
 	stopCmd.Flags().BoolVarP(&autoYes, "yes", "y", false, "Automatically accept all confirmation prompts (default=false)")
+	stopCmd.Flags().BoolVar(&legacyStop, "legacy", false, "Use legacy application stop implementation")
 }

@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi:9.7 as tools_builder
+FROM registry.access.redhat.com/ubi9/ubi:9.8 as tools_builder
 
 ARG DNF_FLAGS="--disablerepo=* --enablerepo=ubi-9-baseos-rpms --enablerepo=ubi-9-appstream-rpms"
 
@@ -19,7 +19,7 @@ RUN dnf update ${DNF_FLAGS} -y \
   fi \
   && rm -rf /var/cache/dnf && dnf clean all -y
 
-FROM registry.access.redhat.com/ubi9/ubi:9.7 as servicereport_builder
+FROM registry.access.redhat.com/ubi9/ubi:9.8 as servicereport_builder
 
 ARG SR_COMMIT=2a57a3a4b14d23981b4add77670bcea90cf69d77
 ARG DNF_FLAGS="--disablerepo=* --enablerepo=ubi-9-baseos-rpms --enablerepo=ubi-9-appstream-rpms"
@@ -39,7 +39,7 @@ RUN ARCH=$(uname -m) && mkdir -p /rpms && \
   rm -rf /var/cache/dnf && dnf clean all -y; \
   fi
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.7
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8
 
 ARG DNF_FLAGS="--disablerepo=* --enablerepo=ubi-9-baseos-rpms --enablerepo=ubi-9-appstream-rpms"
 
@@ -50,7 +50,7 @@ COPY --from=tools_builder /opt/venv /opt/venv
 COPY --from=servicereport_builder /rpms/ /tmp/rpms/
 
 RUN microdnf update ${DNF_FLAGS} -y && \
-  microdnf install ${DNF_FLAGS} -y python3.12 && \
+  microdnf install ${DNF_FLAGS} -y python3.12 jq tar && \
   ARCH=$(uname -m) && \
   if [ "$ARCH" = "ppc64le" ]; then \
   echo "Installing ServiceReport for ppc64le..." && \

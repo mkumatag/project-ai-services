@@ -5,8 +5,11 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application"
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	appFlags "github.com/project-ai-services/ai-services/internal/pkg/cli/constants/application"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/flagvalidator"
+	"github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 	"github.com/spf13/cobra"
 )
@@ -14,6 +17,7 @@ import (
 var (
 	podName           string
 	containerNameOrID string
+	legacyLogs        bool
 )
 
 var logsCmd = &cobra.Command{
@@ -44,6 +48,17 @@ Arguments
 
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
+		// For podman runtime with default mode
+		if !legacyLogs && rt == types.RuntimeTypePodman {
+			appClient, err := catalogClient.NewApplicationClient()
+			if err != nil {
+				return fmt.Errorf("failed to create application client: %w", err)
+			}
+			if _, err := utils.GetAppByName(appClient, applicationName); err != nil {
+				return err
+			}
+		}
+
 		// Create application instance using factory
 		factory := application.NewFactory(rt)
 		app, err := factory.Create(applicationName)
@@ -65,6 +80,7 @@ func init() {
 }
 
 func initLogsCommonFlags() {
+	logsCmd.Flags().BoolVar(&legacyLogs, "legacy", false, "Use legacy application logs implementation")
 	logsCmd.Flags().StringVar(&podName, appFlags.Logs.Pod, "", "Pod name to show logs from (required)")
 	logsCmd.Flags().StringVar(&containerNameOrID, appFlags.Logs.Container, "", "Container logs to show logs from (Optional)")
 	_ = logsCmd.MarkFlagRequired(appFlags.Logs.Pod)

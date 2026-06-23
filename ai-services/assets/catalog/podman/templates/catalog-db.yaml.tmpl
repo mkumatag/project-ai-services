@@ -6,7 +6,14 @@ metadata:
     ai-services.io/application: "{{ .AppName }}"
     ai-services.io/template: "{{ .AppTemplateName }}"
     ai-services.io/version: "{{ .Version }}"
+    ai-services.io/secret: "catalog-db-secret"
+    ai-services.io/secret-skip-cleanup: "true"
+    ai-services.io/volume: "postgres-catalog"
+    ai-services.io/volume-skip-cleanup: "true"
+  annotations:
+    io.podman.annotations.pids-limit/postgresql: "4096"
 spec:
+  restartPolicy: always
   containers:
   - name: postgresql
     image: "{{ .Values.db.image }}"
@@ -19,13 +26,18 @@ spec:
     - name: POSTGRES_PASSWORD
       valueFrom:
         secretKeyRef:
-          name: catalog-secret
+          name: catalog-db-secret
           key: db-password
     - name: POSTGRES_DB
       value: "{{ .Values.db.database }}"
+    - name: PGDATA
+      value: "/var/lib/pgsql/data"
+    securityContext:
+      runAsUser: 26
+      fsGroup: 26
     volumeMounts:
     - name: postgres-data
-      mountPath: /var/lib/pgsql/18/data
+      mountPath: /var/lib/pgsql:z
     livenessProbe:
       exec:
         command:
@@ -36,6 +48,16 @@ spec:
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - pg_isready -U {{ .Values.db.user }} -d {{ .Values.db.database }}
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
     resources:
       requests:
         memory: "{{ .Values.db.resources.requests.memory }}"
@@ -43,6 +65,5 @@ spec:
         memory: "{{ .Values.db.resources.limits.memory }}"
   volumes:
   - name: postgres-data
-    hostPath:
-      path: {{ .Values.db.dataPath }}
-      type: DirectoryOrCreate
+    persistentVolumeClaim:
+      claimName: "postgres-catalog"

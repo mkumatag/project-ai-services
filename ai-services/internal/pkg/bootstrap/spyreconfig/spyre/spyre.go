@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/jaypipes/ghw"
@@ -20,14 +20,12 @@ const (
 	spyreDeviceIDRev2 = "06a8"
 	sentientGroup     = "sentient"
 	vfioConfigFile    = "/etc/modprobe.d/vfio-pci.conf"
-	memLimitPerCard   = 134234112 // 128MB in bytes - memory lock limit per Spyre card
 )
 
 // Package-level regex patterns compiled once for performance.
 var (
 	vfioOptionsPattern = regexp.MustCompile(`^options\s+(\S+)\s+(.+)$`)
 	vfioConfigPattern  = regexp.MustCompile(`(\w+)=([^=\s]+)`)
-	memLimitPattern    = regexp.MustCompile(`^(@sentient.+)\s+(unlimited|\d+)$`)
 )
 
 // GetNumberOfSpyreCards returns the number of Spyre cards in the system.
@@ -67,22 +65,15 @@ func IsApplicable() bool {
 
 // RunChecks executes all Spyre validation checks.
 func RunChecks() []check.CheckResult {
-	checks := []check.CheckResult{
+	return []check.CheckResult{
 		checkDriverConfig(),
 		checkUdevRule(),
-		checkMemlockConf(),
 		checkVfioPciConf(),
-		checkUserGroup(),
 		checkVfioModule(),
 		checkVfioAccessPermission(),
+		checkSELinuxVFIOPolicy(),
+		checkPodmanServiceSupplementaryGroups(),
 	}
-
-	// Only check podman service configuration if podman is installed
-	if _, err := utils.Podman(); err == nil {
-		checks = append(checks, CheckPodmanServiceSupplementaryGroups())
-	}
-
-	return checks
 }
 
 // parseVfioConfigLine parses a single VFIO configuration line and returns the module name
@@ -193,127 +184,44 @@ func checkDriverConfig() *check.ConfigurationFileCheck {
 // checkUdevRule validates VFIO udev rules configuration.
 func checkUdevRule() *check.ConfigurationFileCheck {
 	configFile := "/etc/udev/rules.d/95-vfio-3.rules"
-	expectedRule := `SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660"`
+	expectedRules := []string{
+		`SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660", SECLABEL{selinux}="system_u:object_r:vfio_device_t:s0"`,
+		`KERNEL=="vfio", GROUP:="sentient", MODE:="0660", SECLABEL{selinux}="system_u:object_r:vfio_device_t:s0"`,
+	}
 	confCheck := check.NewConfigurationFileCheck("VFIO udev rules configuration", configFile)
 
-	status := false
 	lines, ok := readConfigFileLines(configFile)
-	if ok {
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-
-			if line == expectedRule {
-				status = true
-
-				break
-			}
-
-			// Check for incorrect vfio rules.
-			if strings.Contains(line, `SUBSYSTEM=="vfio"`) &&
-				(strings.Contains(line, "GROUP:=") || strings.Contains(line, "MODE:=")) {
-				status = false
-
-				break
-			}
-		}
-	}
-
-	confCheck.AddAttribute(expectedRule, status, "", "")
-	confCheck.SetStatus(status)
-
-	return confCheck
-}
-
-// parseMemLimitLine extracts the group pattern and value from a memlock config line.
-func parseMemLimitLine(line string, pattern *regexp.Regexp) (groupPattern, value string, ok bool) {
-	matches := pattern.FindStringSubmatch(line)
-	if matches == nil {
-		return "", "", false
-	}
-
-	return matches[1], matches[2], true
-}
-
-// isMemLimitValid checks if a line's memlock value satisfies the expected limit.
-func isMemLimitValid(lineValue, expectedValue string) bool {
-	// If line has unlimited, it satisfies any requirement
-	if lineValue == "unlimited" {
-		return true
-	}
-
-	// If expected is unlimited but line isn't, it doesn't satisfy.
-	if expectedValue == "unlimited" {
-		return false
-	}
-
-	// Both are numeric - compare values.
-	lineInt, err1 := strconv.Atoi(lineValue)
-	expectedInt, err2 := strconv.Atoi(expectedValue)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-
-	return lineInt >= expectedInt
-}
-
-// isMemLimitConfigValid checks if memlock configuration is valid.
-func isMemLimitConfigValid(configFile, expectedConf string) bool {
-	lines, err := utils.ReadFileLines(configFile)
-	if err != nil {
-		log.Printf("Error reading %s: %v", configFile, err)
-
-		return false
-	}
-
-	// Parse expected configuration once.
-	expectedGroup, expectedValue, ok := parseMemLimitLine(expectedConf, memLimitPattern)
 	if !ok {
-		return false
+		for _, rule := range expectedRules {
+			confCheck.AddAttribute(rule, false, "", "")
+		}
+		confCheck.SetStatus(false)
+
+		return confCheck
 	}
 
+	foundRules := make(map[string]bool)
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-
-		// Skip empty lines.
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// Check for exact match first.
-		if line == expectedConf {
-			return true
-		}
-
-		// Parse current line.
-		lineGroup, lineValue, ok := parseMemLimitLine(line, memLimitPattern)
-		if !ok {
-			continue
-		}
-
-		// Check if this line matches the expected group pattern.
-		if lineGroup == expectedGroup {
-			return isMemLimitValid(lineValue, expectedValue)
+		for _, expectedRule := range expectedRules {
+			if line == expectedRule {
+				foundRules[expectedRule] = true
+			}
 		}
 	}
 
-	return false
-}
+	allFound := true
+	for _, rule := range expectedRules {
+		found := foundRules[rule]
+		confCheck.AddAttribute(rule, found, "", "")
+		allFound = allFound && found
+	}
 
-// checkMemlockConf validates user memlock configuration.
-func checkMemlockConf() *check.ConfigurationFileCheck {
-	numCards := GetNumberOfSpyreCards()
-	memlimit := numCards * memLimitPerCard
-	expectedConf := fmt.Sprintf("@sentient - memlock %d", memlimit)
-	configFile := "/etc/security/limits.d/memlock.conf"
-
-	confCheck := check.NewConfigurationFileCheck("User memlock configuration", configFile)
-
-	status := isMemLimitConfigValid(configFile, expectedConf)
-	confCheck.AddAttribute(expectedConf, status, "", "")
-	confCheck.SetStatus(status)
+	confCheck.SetStatus(allFound)
 
 	return confCheck
 }
@@ -351,17 +259,6 @@ func checkVfioPciConf() *check.ConfigurationFileCheck {
 	confCheck.SetStatus(status)
 
 	return confCheck
-}
-
-// checkUserGroup validates user group configuration.
-func checkUserGroup() *check.ConfigCheck {
-	userGroupCheck := check.NewConfigCheck("User group configuration")
-
-	status := utils.GroupExists(sentientGroup)
-	userGroupCheck.AddConfig(sentientGroup, status)
-	userGroupCheck.SetStatus(status)
-
-	return userGroupCheck
 }
 
 // checkVfioModule validates VFIO kernel module is loaded.
@@ -402,11 +299,6 @@ func checkVfioAccessPermission() *check.FilesCheck {
 
 	status := true
 	for _, entry := range entries {
-		// Skip /dev/vfio/vfio file.
-		if entry.Name() == "vfio" {
-			continue
-		}
-
 		fullPath := filepath.Join(vfioDir, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
@@ -448,7 +340,7 @@ func checkVfioDevicePermission(path string, expectedGid int) (bool, error) {
 	return fileGid == expectedGid && utils.IsReadWriteToOwnerGroupUsers(path), nil
 }
 
-// CheckPodmanServiceSupplementaryGroups validates that the podman.service has SupplementaryGroups=sentient configured.
+// checkPodmanServiceSupplementaryGroups validates that the podman.service has SupplementaryGroups=sentient configured.
 //
 // Background:
 // When Podman commands are executed directly from the shell, they inherit the user's supplementary groups,
@@ -464,7 +356,7 @@ func checkVfioDevicePermission(path string, expectedGid int) (bool, error) {
 //	SupplementaryGroups=sentient
 //
 // in the [Service] section, allowing socket-based Podman operations to access VFIO devices properly.
-func CheckPodmanServiceSupplementaryGroups() *check.ConfigurationFileCheck {
+func checkPodmanServiceSupplementaryGroups() *check.ConfigurationFileCheck {
 	serviceName := "podman.service"
 	confCheck := check.NewConfigurationFileCheck("Podman service SupplementaryGroups configuration", serviceName)
 
@@ -523,13 +415,66 @@ func isSentientGroupPresent(value string) bool {
 
 	// Check if it's in a space-separated list of groups
 	groups := strings.Fields(value)
-	for _, group := range groups {
-		if group == sentientGroup {
-			return true
-		}
+
+	return slices.Contains(groups, sentientGroup)
+}
+
+// checkSELinuxPolicy is a helper function that validates SELinux policy installation.
+// It checks if SELinux is enabled, if the required path exists, and if the policy is installed.
+func checkSELinuxPolicy(checkName, policyName, requiredPath string) *check.Check {
+	selinuxCheck := check.NewCheck(checkName)
+
+	// Check if SELinux is enabled
+	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
+	if err != nil || exitCode != 0 {
+		// SELinux not available - skip check (pass)
+		selinuxCheck.SetStatus(true)
+
+		return selinuxCheck
 	}
 
-	return false
+	status := strings.TrimSpace(stdout)
+	if status == "Disabled" {
+		// SELinux disabled - skip check (pass)
+		selinuxCheck.SetStatus(true)
+
+		return selinuxCheck
+	}
+
+	// Check if required path exists (if specified)
+	if requiredPath != "" && !utils.FileExists(requiredPath) {
+		// Required path doesn't exist - skip check (pass)
+		selinuxCheck.SetStatus(true)
+
+		return selinuxCheck
+	}
+
+	// Check if policy is installed (requires root/sudo)
+	exitCode, stdout, stderr, err := utils.ExecuteCommand("semodule", "-l")
+	if err != nil || exitCode != 0 {
+		// If permission denied, assume policy needs to be checked with sudo
+		// This is expected when running without sudo - skip check (pass)
+		if strings.Contains(stderr, "Permission denied") || strings.Contains(stderr, "access") {
+			selinuxCheck.SetStatus(true)
+
+			return selinuxCheck
+		}
+		// Other errors mean policy is not installed
+		selinuxCheck.SetStatus(false)
+
+		return selinuxCheck
+	}
+
+	// Check if policy is installed
+	policyInstalled := strings.Contains(stdout, policyName)
+	selinuxCheck.SetStatus(policyInstalled)
+
+	return selinuxCheck
+}
+
+// checkSELinuxVFIOPolicy validates SELinux policy for VFIO device access.
+func checkSELinuxVFIOPolicy() *check.Check {
+	return checkSELinuxPolicy("SELinux VFIO policy configuration", "vllm_vfio_policy", "/dev/vfio")
 }
 
 func setCheckResult(confCheck *check.ConfigurationFileCheck, found, correctValue bool) {

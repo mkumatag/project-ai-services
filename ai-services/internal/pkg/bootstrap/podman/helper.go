@@ -14,20 +14,17 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
-)
-
-const (
-	// dirPermissions is the default permission for creating directories.
-	dirPermissions = 0755
+	"github.com/project-ai-services/ai-services/internal/pkg/spinner"
+	"github.com/project-ai-services/ai-services/internal/pkg/utils/selinux"
 )
 
 // configureSpyre validates and repairs Spyre card configuration.
 func configureSpyre() error {
-	logger.Infoln("Running Spyre configuration validation and repair...", logger.VerbosityLevelDebug)
+	logger.Debugln("Running Spyre configuration validation and repair...")
 
 	// Check if Spyre cards are present
 	if !spyre.IsApplicable() {
-		logger.Infoln("No Spyre cards detected. Validation not applicable.", logger.VerbosityLevelDebug)
+		logger.Debugln("No Spyre cards detected. Validation not applicable.")
 
 		return nil
 	}
@@ -38,16 +35,11 @@ func configureSpyre() error {
 	// Run validation and repair
 	allPassed := runValidationAndRepair()
 
-	// Add current user to sentient group
-	if err := configureUsergroup(); err != nil {
-		return err
-	}
-
 	if !allPassed {
 		return fmt.Errorf("some Spyre configuration checks still failed after repair")
 	}
 
-	logger.Infoln("✓ All Spyre configuration checks passed", logger.VerbosityLevelDebug)
+	logger.Debugln("✓ All Spyre configuration checks passed")
 
 	return nil
 }
@@ -83,13 +75,13 @@ func checkValidationResults(checks []check.CheckResult) bool {
 
 // attemptRepairs attempts to repair failed checks and re-validates.
 func attemptRepairs(checks []check.CheckResult) bool {
-	logger.Infoln("Attempting automatic repairs...", logger.VerbosityLevelDebug)
+	logger.Debugln("Attempting automatic repairs...")
 	results := spyre.Repair(checks)
 
 	logRepairResults(results)
 
 	// Re-run checks after repair
-	logger.Infoln("Re-running validation...", logger.VerbosityLevelDebug)
+	logger.Debugln("Re-running validation...")
 	checks = spyre.RunChecks()
 
 	allPassed := true
@@ -121,14 +113,333 @@ func logRepairResults(results []spyre.RepairResult) {
 }
 
 func configureUsergroup() error {
-	cmd_str := `usermod -aG sentient $USER`
+	// Ensure sentient group exists first
+	if err := ensureSentientGroupExists(); err != nil {
+		return err
+	}
+
+	username := os.Getenv("SUDO_USER")
+	if username == "" {
+		// Fallback to current user if not running via sudo
+		username = os.Getenv("USER")
+		if username == "" {
+			username = os.Getenv("LOGNAME")
+		}
+	}
+	if username == "" {
+		return fmt.Errorf("failed to determine current username: SUDO_USER, USER and LOGNAME environment variables are not set")
+	}
+
+	cmd_str := fmt.Sprintf("usermod -aG sentient %s", username)
 	cmd := exec.Command("bash", "-c", cmd_str)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create sentient group and add current user to the sentient group. Error: %w, output: %s", err, string(out))
+		return fmt.Errorf("failed to add current user to the sentient group. Error: %w, output: %s", err, string(out))
 	}
 
 	return nil
+}
+
+// ensureSentientGroupExists creates the sentient group if it doesn't exist.
+func ensureSentientGroupExists() error {
+	// Check if sentient group already exists
+	cmd := exec.Command("getent", "group", "sentient")
+	if err := cmd.Run(); err == nil {
+		// Group already exists
+		logger.Debugln("sentient group already exists")
+
+		return nil
+	}
+
+	// Create the sentient group
+	logger.Debugln("Creating sentient group")
+	cmd = exec.Command("groupadd", "sentient")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create sentient group: %w, output: %s", err, string(out))
+	}
+
+	logger.Debugln("sentient group created successfully")
+
+	return nil
+}
+
+// configureUlimits configures both memlock and nofile ulimits for the sentient group.
+func configureUlimits() error {
+	if err := configureMemlockLimit(); err != nil {
+		return err
+	}
+
+	if err := configureNofileLimit(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// configureSystemdUserSliceLimits configures systemd user slice limits for rootless podman.
+// This ensures that containers started by non-root users have proper ulimits.
+func configureSystemdUserSliceLimits() error {
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser == "" {
+		// Not running via sudo, skip this configuration
+		logger.Debugln("Not running via sudo, skipping systemd user slice limits configuration")
+
+		return nil
+	}
+
+	userID, err := getUserID(sudoUser)
+	if err != nil {
+		return fmt.Errorf("failed to get user ID for %s: %w", sudoUser, err)
+	}
+
+	// Skip if user is root (UID 0)
+	// Systemd user slice limits only apply to non-root users running rootless podman
+	if userID == "0" {
+		logger.Debugln("User is root, skipping systemd user slice limits configuration")
+
+		return nil
+	}
+
+	sliceDir := fmt.Sprintf("/etc/systemd/system/user-%s.slice.d", userID)
+	limitsFile := fmt.Sprintf("%s/limits.conf", sliceDir)
+
+	// Check if already configured
+	if isSystemdSliceLimitsConfigured(limitsFile) {
+		logger.Debugln("Systemd user slice limits already configured")
+
+		return nil
+	}
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(sliceDir, constants.DirPerm); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", sliceDir, err)
+	}
+
+	// Write limits configuration
+	limitsContent := fmt.Sprintf(`[Slice]
+LimitNOFILE=%d
+LimitMEMLOCK=infinity
+`, constants.MinNofileLimit)
+	if err := os.WriteFile(limitsFile, []byte(limitsContent), constants.FilePerm); err != nil {
+		return fmt.Errorf("failed to write systemd slice limits file: %w", err)
+	}
+
+	// Reload systemd daemon
+	cmd := exec.Command("systemctl", "daemon-reload")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to reload systemd daemon: %w, output: %s", err, string(out))
+	}
+
+	logger.Infof("Systemd user slice limits configured for user %s (UID: %s)", sudoUser, userID)
+
+	return nil
+}
+
+// getUserID gets the user ID for the specified user.
+func getUserID(username string) (string, error) {
+	cmd := exec.Command("id", "-u", username)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user ID: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+// isSystemdSliceLimitsConfigured checks if systemd slice limits are already configured.
+func isSystemdSliceLimitsConfigured(limitsFile string) bool {
+	if !utils.FileExists(limitsFile) {
+		return false
+	}
+
+	lines, err := utils.ReadFileLines(limitsFile)
+	if err != nil {
+		return false
+	}
+
+	hasNofile := false
+	hasMemlock := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(line, "LimitNOFILE="); ok {
+			if value, err := strconv.Atoi(after); err == nil && value >= constants.MinNofileLimit {
+				hasNofile = true
+			}
+		}
+		if after, ok := strings.CutPrefix(line, "LimitMEMLOCK="); ok {
+			if after == "infinity" {
+				hasMemlock = true
+			}
+		}
+	}
+
+	return hasNofile && hasMemlock
+}
+
+// configureMemlockLimit configures memlock ulimit for the sentient group.
+func configureMemlockLimit() error {
+	// Check if configuration already exists and is valid
+	if isMemlockConfigValid(constants.MemlockConfFile) {
+		logger.Debugln("memlock configuration already exists")
+
+		return nil
+	}
+
+	// Read and filter existing content
+	existingContent, err := getFilteredMemlockContent(constants.MemlockConfFile)
+	if err != nil {
+		return err
+	}
+
+	// Write configuration
+	content := existingContent + constants.MemlockConfContent
+	if err := os.WriteFile(constants.MemlockConfFile, []byte(content), constants.FilePerm); err != nil {
+		return fmt.Errorf("failed to write memlock configuration: %w", err)
+	}
+
+	logger.Debugln("memlock configuration created successfully")
+
+	return nil
+}
+
+// isMemlockConfigValid checks if memlock configuration already exists.
+func isMemlockConfigValid(confFile string) bool {
+	if !utils.FileExists(confFile) {
+		return false
+	}
+
+	lines, err := utils.ReadFileLines(confFile)
+	if err != nil {
+		return false
+	}
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == constants.ExpectedMemlockConfig {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getFilteredMemlockContent reads and filters existing memlock configuration.
+func getFilteredMemlockContent(confFile string) (string, error) {
+	if !utils.FileExists(confFile) {
+		return "", nil
+	}
+
+	lines, err := utils.ReadFileLines(confFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read existing memlock.conf: %w", err)
+	}
+
+	var filteredLines []string
+	for _, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "@"+constants.SentientGroupName) {
+			filteredLines = append(filteredLines, line)
+		}
+	}
+
+	if len(filteredLines) > 0 {
+		return strings.Join(filteredLines, "\n") + "\n", nil
+	}
+
+	return "", nil
+}
+
+// configureNofileLimit configures nofile ulimit for the sentient group.
+func configureNofileLimit() error {
+	// Check if configuration already exists and is valid
+	if isNofileConfigValid(constants.NofileConfFile, constants.MinNofileLimit) {
+		logger.Debugln("nofile configuration already exists with sufficient limit")
+
+		return nil
+	}
+
+	// Read and filter existing content
+	existingContent, err := getFilteredNofileContent(constants.NofileConfFile)
+	if err != nil {
+		return err
+	}
+
+	// Write configuration
+	nofileConf := fmt.Sprintf(constants.NofileConfTemplate, constants.MinNofileLimit)
+	content := existingContent + nofileConf
+	if err := os.WriteFile(constants.NofileConfFile, []byte(content), constants.FilePerm); err != nil {
+		return fmt.Errorf("failed to write nofile configuration: %w", err)
+	}
+
+	logger.Debugln("nofile configuration created successfully")
+
+	return nil
+}
+
+// isNofileConfigValid checks if nofile configuration already exists with sufficient limit.
+func isNofileConfigValid(confFile string, minLimit int) bool {
+	if !utils.FileExists(confFile) {
+		return false
+	}
+
+	lines, err := utils.ReadFileLines(confFile)
+	if err != nil {
+		return false
+	}
+
+	for _, line := range lines {
+		if isValidNofileLine(strings.TrimSpace(line), minLimit) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isValidNofileLine checks if a line contains valid nofile configuration.
+func isValidNofileLine(line string, minLimit int) bool {
+	sentientPrefix := "@" + constants.SentientGroupName
+
+	if !strings.HasPrefix(line, sentientPrefix) || !strings.Contains(line, "nofile") {
+		return false
+	}
+
+	parts := strings.Fields(line)
+	if len(parts) < constants.NofileFieldCount {
+		return false
+	}
+
+	value, err := strconv.Atoi(parts[3])
+
+	return err == nil && value >= minLimit
+}
+
+// getFilteredNofileContent reads and filters existing nofile configuration.
+func getFilteredNofileContent(confFile string) (string, error) {
+	if !utils.FileExists(confFile) {
+		return "", nil
+	}
+
+	lines, err := utils.ReadFileLines(confFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read existing limits.conf: %w", err)
+	}
+
+	sentientPrefix := "@" + constants.SentientGroupName
+	var filteredLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, sentientPrefix) && strings.Contains(trimmed, "nofile") {
+			continue
+		}
+		filteredLines = append(filteredLines, line)
+	}
+
+	if len(filteredLines) > 0 {
+		return strings.Join(filteredLines, "\n") + "\n", nil
+	}
+
+	return "", nil
 }
 
 func installPodman() error {
@@ -142,124 +453,54 @@ func installPodman() error {
 }
 
 func setupPodman() error {
-	// start podman socket
-	if err := systemctl("restart", "podman.socket"); err != nil {
-		return fmt.Errorf("failed to start podman socket: %w", err)
-	}
-	// enable podman socket
-	if err := systemctl("enable", "podman.socket"); err != nil {
-		return fmt.Errorf("failed to enable podman socket: %w", err)
+	euid := os.Geteuid()
+	sudoUser := os.Getenv("SUDO_USER")
+
+	// Enable podman services based on user context
+	if err := enablePodmanServices(euid == 0 && sudoUser == "", sudoUser); err != nil {
+		return err
 	}
 
-	logger.Infoln("Waiting for podman socket to be ready...", logger.VerbosityLevelDebug)
+	logger.Debugln("Waiting for podman socket to be ready...")
 	time.Sleep(podmanSocketWaitDuration) // wait for socket to be ready
 
 	if err := utils.PodmanHealthCheck(); err != nil {
 		return fmt.Errorf("podman health check failed after configuration: %w", err)
 	}
 
-	logger.Infof("Podman configured successfully.")
-
 	return nil
 }
 
-func configurePodmanGroups() error {
-	logger.Infoln("Configuring podman service supplementary groups...", logger.VerbosityLevelDebug)
+// enablePodmanServices enables podman services for root or user context.
+func enablePodmanServices(isRoot bool, sudoUser string) error {
+	services := []string{"podman.socket", "podman-restart.service"}
+	var args []string
 
-	// Check if Spyre cards are present - only needed if Spyre cards exist
-	if !spyre.IsApplicable() {
-		logger.Infoln("No Spyre cards detected. Skipping podman service supplementary groups configuration.", logger.VerbosityLevelDebug)
-
-		return nil
+	if isRoot {
+		args = []string{"--now"}
+	} else {
+		args = []string{"--now", fmt.Sprintf("--machine=%s@.host", sudoUser), "--user"}
 	}
 
-	// Run the check
-	checkResult := spyre.CheckPodmanServiceSupplementaryGroups()
-	if checkResult.GetStatus() {
-		logger.Infoln("✓ Podman service supplementary groups already configured", logger.VerbosityLevelDebug)
-
-		return nil
-	}
-
-	// Attempt repair
-	logger.Infoln("Fixing podman service supplementary groups configuration...", logger.VerbosityLevelDebug)
-	if err := fixPodmanServiceSupplementaryGroups(); err != nil {
-		return fmt.Errorf("failed to configure podman service supplementary groups: %w", err)
-	}
-
-	logger.Infof("✓ Podman service supplementary groups configured successfully")
-
-	return nil
-}
-
-// fixPodmanServiceSupplementaryGroups repairs the podman service SupplementaryGroups configuration.
-//
-// This function addresses the issue where Podman operations invoked via the socket (e.g., through
-// systemd or remote API calls) lack access to VFIO devices because the service doesn't inherit
-// the user's supplementary groups. While shell-based Podman commands work fine (inheriting the
-// user's 'sentient' group), socket-based operations fail without explicit configuration.
-//
-// The repair process:
-//  1. Creates a systemd drop-in file at /etc/systemd/system/podman.service.d/override.conf
-//     containing: [Service]\nSupplementaryGroups=sentient
-//  2. Reloads the systemd daemon to pick up the new configuration
-//  3. Restarts both podman.service and podman.socket to apply the changes
-//
-// This ensures that all Podman operations, regardless of invocation method, have the necessary
-// permissions to access VFIO devices (/dev/vfio/*) required for Spyre card functionality.
-func fixPodmanServiceSupplementaryGroups() error {
-	if err := createPodmanServiceDropIn(); err != nil {
-		return err
-	}
-
-	if err := reloadAndRestartPodmanServices(); err != nil {
-		return err
+	for _, svc := range services {
+		if err := systemctl("enable", svc, args...); err != nil {
+			return fmt.Errorf("failed to enable %s: %w", svc, err)
+		}
 	}
 
 	return nil
 }
 
-func createPodmanServiceDropIn() error {
-	dropInDir := "/etc/systemd/system/podman.service.d"
-	if err := os.MkdirAll(dropInDir, dirPermissions); err != nil {
-		return err
-	}
-
-	dropInFile := dropInDir + "/override.conf"
-	dropInContent := `[Service]
-SupplementaryGroups=sentient
-`
-
-	return os.WriteFile(dropInFile, []byte(dropInContent), utils.FilePermissions)
-}
-
-func reloadAndRestartPodmanServices() error {
-	// Reload systemd daemon
-	cmd := exec.Command("systemctl", "daemon-reload")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to reload systemd daemon: %v, output: %s", err, string(out))
-	}
-
-	// Restart podman service
-	cmd = exec.Command("systemctl", "restart", "podman.service")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to restart podman.service: %v, output: %s", err, string(out))
-	}
-
-	// Restart podman socket
-	cmd = exec.Command("systemctl", "restart", "podman.socket")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to restart podman.socket: %v, output: %s", err, string(out))
-	}
-
-	return nil
-}
-
-func systemctl(action, unit string) error {
+func systemctl(action, unit string, args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "systemctl", action, unit)
+	cmdArgs := make([]string, 0, len(args))
+	cmdArgs = append(cmdArgs, action)
+	cmdArgs = append(cmdArgs, args...)
+	cmdArgs = append(cmdArgs, unit)
+
+	cmd := exec.CommandContext(ctx, "systemctl", cmdArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to %s %s: %v, output: %s", action, unit, err, string(out))
@@ -281,38 +522,38 @@ func setupSMTLevel() error {
 		return fmt.Errorf("failed to get current SMT level: %w", err)
 	}
 
-	logger.Infof("Current SMT level is %d", currentSMTLevel, logger.VerbosityLevelDebug)
+	logger.Debugf("Current SMT level is %d", currentSMTLevel)
 
 	// 1. Enable smtstate.service
 	if err := systemctl("enable", "smtstate.service"); err != nil {
 		return fmt.Errorf("failed to enable smtstate.service: %w", err)
 	}
-	logger.Infoln("smtstate.service enabled successfully", logger.VerbosityLevelDebug)
+	logger.Debugln("smtstate.service enabled successfully")
 
 	// 2. Start smtstate.service
 	if err := systemctl("start", "smtstate.service"); err != nil {
 		return fmt.Errorf("failed to start smtstate.service: %w", err)
 	}
-	logger.Infoln("smtstate.service started successfully", logger.VerbosityLevelDebug)
+	logger.Debugln("smtstate.service started successfully")
 
 	// 3. Set SMT level to 2
 	if currentSMTLevel != constants.SMTLevel {
-		logger.Infof("Setting SMT level from %d to %d", currentSMTLevel, constants.SMTLevel, logger.VerbosityLevelDebug)
+		logger.Debugf("Setting SMT level from %d to %d", currentSMTLevel, constants.SMTLevel)
 		cmd = exec.Command("ppc64_cpu", fmt.Sprintf("--smt=%d", constants.SMTLevel))
 		out, err = cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to set SMT level to %d: %v, output: %s", constants.SMTLevel, err, string(out))
 		}
-		logger.Infof("SMT level set to %d", constants.SMTLevel, logger.VerbosityLevelDebug)
+		logger.Debugf("SMT level set to %d", constants.SMTLevel)
 	} else {
-		logger.Infof("SMT level is already set to %d", constants.SMTLevel, logger.VerbosityLevelDebug)
+		logger.Debugf("SMT level is already set to %d", constants.SMTLevel)
 	}
 
 	// 4. Restart smtstate.service to persist the setting
 	if err := systemctl("restart", "smtstate.service"); err != nil {
 		return fmt.Errorf("failed to restart smtstate.service: %w", err)
 	}
-	logger.Infoln("smtstate.service restarted successfully", logger.VerbosityLevelDebug)
+	logger.Debugln("smtstate.service restarted successfully")
 
 	// 5. Verify the SMT level is set correctly
 	cmd = exec.Command("ppc64_cpu", "--smt")
@@ -325,7 +566,7 @@ func setupSMTLevel() error {
 	if err != nil {
 		return fmt.Errorf("failed to get current SMT level: %w", err)
 	}
-	logger.Infof("SMT level verified: %d", smtLevel, logger.VerbosityLevelDebug)
+	logger.Debugf("SMT level verified: %d", smtLevel)
 
 	return nil
 }
@@ -344,4 +585,161 @@ func getSMTLevel(output string) (int, error) {
 	}
 
 	return SMTlevel, nil
+}
+
+// setupSELinuxPodmanSocketPolicy configures SELinux policy for Podman socket access.
+func setupSELinuxPodmanSocketPolicy() error {
+	// Apply root Podman socket policy
+	result := spyre.ApplySELinuxPolicy(
+		"SELinux Podman socket policy configuration",
+		"ai_services_root_policy",
+		selinux.RootPodmanSocketPolicyContent,
+		"SELinux Podman socket policy configured successfully",
+	)
+
+	if result.Status == spyre.StatusFailedToFix {
+		return result.Error
+	}
+
+	// Apply rootless Podman socket policy
+	rootlessResult := spyre.ApplySELinuxPolicy(
+		"SELinux rootless Podman socket policy configuration",
+		"ai_services_nonroot_policy",
+		selinux.RootlessPodmanSocketPolicyContent,
+		"SELinux rootless Podman socket policy configured successfully",
+	)
+
+	if rootlessResult.Status == spyre.StatusFailedToFix {
+		return rootlessResult.Error
+	}
+
+	return nil
+}
+
+// ensurePodmanInstalled checks if podman is installed and installs it if needed.
+func ensurePodmanInstalled(ctx context.Context) error {
+	s := spinner.New("Checking podman installation")
+	s.Start(ctx)
+
+	if _, err := utils.Podman(); err != nil {
+		s.UpdateMessage("Installing podman")
+		if err := installPodman(); err != nil {
+			s.Fail("failed to install podman")
+
+			return err
+		}
+		s.Stop("podman installed successfully")
+	} else {
+		s.Stop("podman already installed")
+	}
+
+	return nil
+}
+
+// configurePodman enable podman services in the system.
+func configurePodman(ctx context.Context) error {
+	s := spinner.New("Configure podman")
+	s.Start(ctx)
+
+	if err := setupPodman(); err != nil {
+		s.Fail("failed to configure podman")
+
+		return err
+	}
+	s.Stop("Podman configured successfully")
+
+	return nil
+}
+
+// ensureSpyreConfigured validates and repairs Spyre card configuration.
+func ensureSpyreConfigured(ctx context.Context) error {
+	s := spinner.New("Checking spyre card configuration")
+	s.Start(ctx)
+
+	if err := configureSpyre(); err != nil {
+		s.Fail("failed to configure spyre card")
+
+		return err
+	}
+	s.Stop("Spyre cards configuration validated successfully.")
+
+	return nil
+}
+
+// ensureUsergroupConfigured ensures sentient group exists and adds current user to it.
+// This is required for both Spyre and non-Spyre setups to handle ulimit configurations.
+func ensureUsergroupConfigured(ctx context.Context) error {
+	s := spinner.New("Configuring user groups")
+	s.Start(ctx)
+
+	if err := configureUsergroup(); err != nil {
+		s.Fail("failed to configure user groups")
+
+		return err
+	}
+	s.Stop("User groups configured successfully")
+
+	return nil
+}
+
+// ensureUlimitsConfigured configures ulimits (memlock and nofile) for the sentient group.
+// This is required for both Spyre and non-Spyre setups to allow pods to run properly.
+func ensureUlimitsConfigured(ctx context.Context) error {
+	s := spinner.New("Configuring ulimits")
+	s.Start(ctx)
+
+	if err := configureUlimits(); err != nil {
+		s.Fail("failed to configure ulimits")
+
+		return err
+	}
+	s.Stop("Ulimits configured successfully")
+
+	return nil
+}
+
+// ensureSystemdSliceLimitsConfigured configures systemd user slice limits for rootless podman.
+// This is required for both Spyre and non-Spyre setups to ensure proper ulimits for non-root users.
+func ensureSystemdSliceLimitsConfigured(ctx context.Context) error {
+	s := spinner.New("Configuring systemd user slice limits")
+	s.Start(ctx)
+
+	if err := configureSystemdUserSliceLimits(); err != nil {
+		s.Fail("failed to configure systemd user slice limits")
+
+		return err
+	}
+	s.Stop("Systemd user slice limits configured successfully")
+
+	return nil
+}
+
+// ensureSMTConfigured sets up SMT level to 2 and persists via systemd.
+func ensureSMTConfigured(ctx context.Context) error {
+	s := spinner.New("Configuring SMT level to 2")
+	s.Start(ctx)
+
+	if err := setupSMTLevel(); err != nil {
+		s.Fail("failed to configure SMT level")
+
+		return err
+	}
+	s.Stop("SMT level configured successfully (set to 2)")
+
+	return nil
+}
+
+// ensureSELinuxPolicyConfigured sets up SELinux policy for Podman socket access.
+func ensureSELinuxPolicyConfigured(ctx context.Context) error {
+	s := spinner.New("Configuring SELinux Podman socket policy")
+	s.Start(ctx)
+
+	if err := setupSELinuxPodmanSocketPolicy(); err != nil {
+		s.Fail("failed to configure SELinux Podman socket policy")
+
+		return err
+	}
+	s.Stop("SELinux Podman socket policy configured successfully")
+
+	return nil
 }

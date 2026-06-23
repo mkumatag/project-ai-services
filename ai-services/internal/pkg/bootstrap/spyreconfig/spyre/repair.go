@@ -1,11 +1,14 @@
 package spyre
 
 import (
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/check"
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/utils/selinux"
 )
 
 // RepairStatus represents the status of a repair operation.
@@ -24,7 +27,9 @@ const (
 	// expectedKeyValueParts is the expected number of parts when splitting a key:value pair.
 	expectedKeyValueParts = 2
 	// maxVfioRuleParts is the maximum number of comma-separated parts in a valid VFIO rule.
-	maxVfioRuleParts = 3
+	maxVfioRuleParts = 4
+	// dirPermissions is the default permission for creating directories.
+	dirPermissions = 0755
 )
 
 // RepairResult represents the result of a repair operation.
@@ -37,7 +42,8 @@ type RepairResult struct {
 
 // Repair attempts to fix all failed Spyre checks.
 func Repair(checks []check.CheckResult) []RepairResult {
-	var results []RepairResult
+	const checkResultsLen = 7
+	results := make([]RepairResult, 0, checkResultsLen)
 
 	// Create a map for easy lookup.
 	checkMap := make(map[string]check.CheckResult)
@@ -46,14 +52,14 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	}
 
 	// Fix checks in dependency order.
+	// Note: User group, ulimit, and systemd slice limit configurations moved to generic bootstrap flow
 	results = append(results, fixVFIODriverConfig(checkMap))
-	results = append(results, fixMemlockConf(checkMap))
 	results = append(results, fixUdevRule(checkMap))
 	results = append(results, fixVFIOPCIConf(checkMap))
-	userGroupResult := fixUserGroup(checkMap)
-	results = append(results, userGroupResult)
 	results = append(results, fixVFIOModule(checkMap))
-	results = append(results, fixVFIOPermissions(checkMap, userGroupResult))
+	results = append(results, fixVFIOPermissions(checkMap, RepairResult{}))
+	results = append(results, fixSELinuxVFIOPolicy())
+	results = append(results, fixPodmanServiceSupplementaryGroups(checkMap))
 
 	return results
 }
@@ -128,51 +134,6 @@ func fixVFIODriverConfig(checkMap map[string]check.CheckResult) RepairResult {
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
 }
 
-// fixMemlockConf repairs user memlock configuration.
-func fixMemlockConf(checkMap map[string]check.CheckResult) RepairResult {
-	checkName := "User memlock configuration"
-	chk, ok := getCheckFromMap(checkMap, checkName)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped}
-	}
-
-	confCheck, ok := chk.(*check.ConfigurationFileCheck)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
-	}
-
-	// Read existing file.
-	lines, err := utils.ReadFileLines(confCheck.FilePath)
-	if err != nil && !os.IsNotExist(err) {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	// Remove old @sentient lines.
-	var updatedLines []string
-	for _, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), "@sentient") {
-			updatedLines = append(updatedLines, line)
-		}
-	}
-
-	// Add new configuration.
-	for key, attr := range confCheck.Attributes {
-		if !attr.Status {
-			updatedLines = append(updatedLines, key)
-		}
-	}
-
-	// Write back.
-	content := strings.Join(updatedLines, "\n")
-	if err := utils.WriteToFile(confCheck.FilePath, content); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	msg := "Memlock limit set. User must be in sentient group: sudo usermod -aG sentient <user>"
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: msg}
-}
-
 // fixUdevRule repairs VFIO udev rules.
 func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 	checkName := "VFIO udev rules configuration"
@@ -186,7 +147,10 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
 	}
 
-	expectedRule := `SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660"`
+	const expectedRuleCount = 2
+	expectedRules := make([]string, 0, expectedRuleCount)
+	expectedRules = append(expectedRules, `SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660", SECLABEL{selinux}="system_u:object_r:vfio_device_t:s0"`)
+	expectedRules = append(expectedRules, `KERNEL=="vfio", GROUP:="sentient", MODE:="0660", SECLABEL{selinux}="system_u:object_r:vfio_device_t:s0"`)
 
 	// Read existing file if it exists.
 	var updatedLines []string
@@ -204,8 +168,8 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		}
 	}
 
-	// Add the correct rule at the beginning.
-	updatedLines = append([]string{expectedRule}, updatedLines...)
+	// Add the correct rules at the beginning.
+	updatedLines = append(expectedRules, updatedLines...)
 
 	// Write back.
 	content := strings.Join(updatedLines, "\n") + "\n"
@@ -213,6 +177,7 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
+	// Note: Udev rules are reloaded by fixVFIOPermissions() which runs after this function.
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
 }
 
@@ -285,31 +250,6 @@ func appendMissingModules(confCheck *check.ConfigurationFileCheck, checkName str
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
 }
 
-// fixUserGroup repairs user group configuration.
-func fixUserGroup(checkMap map[string]check.CheckResult) RepairResult {
-	checkName := "User group configuration"
-	chk, ok := getCheckFromMap(checkMap, checkName)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped}
-	}
-
-	configCheck, ok := chk.(*check.ConfigCheck)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
-	}
-
-	// Create missing groups.
-	for groupName, status := range configCheck.Configs {
-		if !status {
-			if err := utils.CreateGroup(groupName); err != nil {
-				return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-			}
-		}
-	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed}
-}
-
 // fixVFIOModule repairs VFIO kernel module.
 func fixVFIOModule(checkMap map[string]check.CheckResult) RepairResult {
 	checkName := "VFIO kernel module loaded"
@@ -345,6 +285,240 @@ func fixVFIOPermissions(checkMap map[string]check.CheckResult, userGroupResult R
 	}
 
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
+}
+
+// isSELinuxEnabledAndActive checks if SELinux is enabled and active.
+func isSELinuxEnabledAndActive() (bool, string) {
+	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
+	if err != nil || exitCode != 0 {
+		return false, "SELinux not available or not enabled"
+	}
+
+	status := strings.TrimSpace(stdout)
+	if status == "Disabled" {
+		return false, "SELinux is disabled"
+	}
+
+	return true, ""
+}
+
+// fixSELinuxVFIOPolicy configures SELinux policy for VFIO device access.
+// This allows containers with container_t type to access VFIO devices.
+func fixSELinuxVFIOPolicy() RepairResult {
+	result := ApplySELinuxPolicy(
+		"SELinux VFIO policy configuration",
+		"vllm_vfio_policy",
+		selinux.VFIOPolicyContent,
+		"SELinux VFIO policy configured successfully",
+	)
+
+	// Reload udev rules to apply SELinux labels to existing devices if policy was fixed
+	if result.Status == StatusFixed {
+		if err := utils.ReloadUdevRules(); err != nil {
+			return RepairResult{
+				CheckName: result.CheckName,
+				Status:    StatusFailedToFix,
+				Error:     err,
+			}
+		}
+	}
+
+	return result
+}
+
+// ApplySELinuxPolicy is a generic helper to apply SELinux policies.
+func ApplySELinuxPolicy(checkName, policyName, policyContent, successMessage string) RepairResult {
+	enabled, msg := isSELinuxEnabledAndActive()
+	if !enabled {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
+	}
+
+	tmpDir, err := os.MkdirTemp("", "selinux_build")
+	if err != nil {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     fmt.Errorf("failed to create temp directory: %w", err),
+		}
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove temp directory %s: %v\n", tmpDir, err)
+		}
+	}()
+
+	if slices.Contains(selinux.CILPolicyContent, policyName) {
+		// Use reinstall=true to ensure policy is updated if it already exists
+		err = installSELinuxPolicyCil(tmpDir, policyName, policyContent, true)
+	} else {
+		// Use reinstall=true to ensure policy is updated if it already exists
+		err = buildAndInstallSELinuxPolicy(tmpDir, policyName, policyContent, true)
+	}
+	if err != nil {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     err,
+		}
+	}
+
+	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: successMessage}
+}
+
+// buildAndInstallSELinuxPolicy builds and installs a SELinux policy module.
+func installSELinuxPolicyCil(tmpDir, policyName, teContent string, reinstall bool) error {
+	// Write the .te file
+	cilPath := fmt.Sprintf("%s/%s.cil", tmpDir, policyName)
+	if err := utils.WriteToFile(cilPath, teContent); err != nil {
+		return fmt.Errorf("failed to write .cil file: %w", err)
+	}
+
+	// Install or update the module
+	if reinstall {
+		// Remove old module first
+		_, _, _, _ = utils.ExecuteCommand("semodule", "-r", policyName)
+	}
+
+	// Install the module
+	exitCode, _, stderr, err := utils.ExecuteCommand("semodule", "-i",
+		cilPath,
+		"/usr/share/udica/templates/base_container.cil",
+		"/usr/share/udica/templates/net_container.cil")
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("failed to install custom selinux policy: %v, stderr: %s", err, stderr)
+	}
+
+	return nil
+}
+
+// buildAndInstallSELinuxPolicy builds and installs a SELinux policy module.
+func buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent string, reinstall bool) error {
+	// Write the .te file
+	tePath := fmt.Sprintf("%s/%s.te", tmpDir, policyName)
+	if err := utils.WriteToFile(tePath, teContent); err != nil {
+		return fmt.Errorf("failed to write .te file: %w", err)
+	}
+	// Compile .te -> .mod
+	modPath := fmt.Sprintf("%s/%s.mod", tmpDir, policyName)
+	exitCode, _, stderr, err := utils.ExecuteCommand("checkmodule", "-M", "-m", "-o", modPath, tePath)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("failed to compile policy module: %v, stderr: %s", err, stderr)
+	}
+
+	// Package .mod -> .pp
+	ppPath := fmt.Sprintf("%s/%s.pp", tmpDir, policyName)
+	exitCode, _, stderr, err = utils.ExecuteCommand("semodule_package", "-o", ppPath, "-m", modPath)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("failed to package policy module: %v, stderr: %s", err, stderr)
+	}
+
+	// Install or update the module
+	if reinstall {
+		// Remove old module first
+		_, _, _, _ = utils.ExecuteCommand("semodule", "-r", policyName)
+	}
+
+	// Install the module
+	exitCode, _, stderr, err = utils.ExecuteCommand("semodule", "-i", ppPath)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("failed to install policy module: %v, stderr: %s", err, stderr)
+	}
+
+	return nil
+}
+
+// fixPodmanServiceSupplementaryGroups repairs the podman service SupplementaryGroups configuration.
+//
+// This function addresses the issue where Podman operations invoked via the socket (e.g., through
+// systemd or remote API calls) lack access to VFIO devices because the service doesn't inherit
+// the user's supplementary groups. While shell-based Podman commands work fine (inheriting the
+// user's 'sentient' group), socket-based operations fail without explicit configuration.
+//
+// The repair process:
+//  1. Creates a systemd drop-in file at /etc/systemd/system/podman.service.d/override.conf
+//     containing: [Service]\nSupplementaryGroups=sentient
+//  2. Reloads the systemd daemon to pick up the new configuration
+//  3. Restarts both podman.service and podman.socket to apply the changes
+//
+// This ensures that all Podman operations, regardless of invocation method, have the necessary
+// permissions to access VFIO devices (/dev/vfio/*) required for Spyre card functionality.
+func fixPodmanServiceSupplementaryGroups(checkMap map[string]check.CheckResult) RepairResult {
+	checkName := "Podman service SupplementaryGroups configuration"
+	_, ok := getCheckFromMap(checkMap, checkName)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
+
+	if err := createPodmanServiceDropIn(); err != nil {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     err,
+			Message:   err.Error(),
+		}
+	}
+
+	if err := reloadAndRestartPodmanServices(); err != nil {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     err,
+			Message:   err.Error(),
+		}
+	}
+
+	return RepairResult{
+		CheckName: checkName,
+		Status:    StatusFixed,
+	}
+}
+
+func createPodmanServiceDropIn() error {
+	dropInDir := "/etc/systemd/system/podman.service.d"
+	if err := os.MkdirAll(dropInDir, dirPermissions); err != nil {
+		return err
+	}
+
+	dropInFile := dropInDir + "/override.conf"
+	dropInContent := `[Service]
+SupplementaryGroups=sentient
+`
+
+	return utils.WriteToFile(dropInFile, dropInContent)
+}
+
+func reloadAndRestartPodmanServices() error {
+	// Reload systemd daemon
+	exitCode, _, _, err := utils.ExecuteCommand("systemctl", "daemon-reload")
+	if err != nil || exitCode != 0 {
+		if err == nil {
+			err = os.ErrInvalid
+		}
+
+		return err
+	}
+
+	// Restart podman service
+	exitCode, _, _, err = utils.ExecuteCommand("systemctl", "restart", "podman.service")
+	if err != nil || exitCode != 0 {
+		if err == nil {
+			err = os.ErrInvalid
+		}
+
+		return err
+	}
+
+	// Restart podman socket
+	exitCode, _, _, err = utils.ExecuteCommand("systemctl", "restart", "podman.socket")
+	if err != nil || exitCode != 0 {
+		if err == nil {
+			err = os.ErrInvalid
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 // Made with Bob

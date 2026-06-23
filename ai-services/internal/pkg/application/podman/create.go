@@ -46,30 +46,30 @@ func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions
 	}
 
 	// load metadata.yml to read the app metadata
-	appMetadata, err := tp.LoadMetadata(opts.TemplateName, true)
-	if err != nil {
+	var appMetadata templates.AppMetadata
+	if err := tp.LoadMetadata(opts.TemplateName, true, &appMetadata); err != nil {
 		return fmt.Errorf("failed to read the app metadata: %w", err)
 	}
 
-	if err := p.verifyPodTemplateExists(tmpls, appMetadata); err != nil {
+	if err := p.verifyPodTemplateExists(tmpls, &appMetadata); err != nil {
 		return fmt.Errorf("failed to verify pod template: %w", err)
 	}
 
-	// Check if pods already exists with the given application name
-	existingPods, err := helpers.CheckExistingPodsForApplication(p.runtime, opts.Name)
+	// Check if resources already exists with the given application name
+	existingResources, err := helpers.CheckExistingResourcesForApplication(ctx, p.runtime, opts.Name, nil)
 	if err != nil {
 		return fmt.Errorf("failed while checking existing pods for application: %w", err)
 	}
 
 	// if all the pods for given application are already deployed, just log and do not proceed further
-	if len(existingPods) == len(tmpls) {
+	if len(existingResources) == len(tmpls) {
 		logger.Infof("Pods for given app: %s are already deployed. Please use 'ai-services application ps %s' to see the pods deployed\n", opts.Name, opts.Name)
 
 		return nil
 	}
 
 	// ---- Validate Spyre card Requirements ----
-	pciAddresses, err := p.validateAndAllocateSpyreCards(opts.TemplateName, opts.Name, tmpls)
+	pciAddresses, err := p.validateAndAllocateSpyreCards(ctx, opts.TemplateName, opts.Name, tmpls)
 	if err != nil {
 		return err
 	}
@@ -81,10 +81,10 @@ func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions
 	// Loop through all pod templates, render and run kube play
 	logger.Infof("Total Pod Templates to be processed: %d\n", len(tmpls))
 
-	return p.deployApplication(ctx, opts, tmpls, appMetadata, pciAddresses)
+	return p.deployApplication(ctx, opts, tmpls, &appMetadata, pciAddresses, existingResources)
 }
 
-func (p *PodmanApplication) validateAndAllocateSpyreCards(templateName, appName string, tmpls map[string]*template.Template) ([]string, error) {
+func (p *PodmanApplication) validateAndAllocateSpyreCards(ctx context.Context, templateName, appName string, tmpls map[string]*template.Template) ([]string, error) {
 	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 
 	reqSpyreCardsCount, err := p.calculateReqSpyreCards(tp, utils.ExtractMapKeys(tmpls), templateName, appName)
@@ -97,7 +97,7 @@ func (p *PodmanApplication) validateAndAllocateSpyreCards(templateName, appName 
 	}
 
 	// calculate the actual available spyre cards
-	pciAddresses, err := helpers.FindFreeSpyreCards()
+	pciAddresses, err := helpers.FindFreeSpyreCards(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find free Spyre Cards: %w", err)
 	}
@@ -128,21 +128,17 @@ func (p *PodmanApplication) prepareApplicationArtifacts(ctx context.Context, opt
 	return nil
 }
 
-func (p *PodmanApplication) deployApplication(ctx context.Context, opts types.CreateOptions, tmpls map[string]*template.Template, appMetadata *templates.AppMetadata, pciAddresses []string) error {
+func (p *PodmanApplication) deployApplication(ctx context.Context, opts types.CreateOptions, tmpls map[string]*template.Template,
+	appMetadata *templates.AppMetadata, pciAddresses []string, existingResources []string) error {
 	logger.Infof("Total Pod Templates to be processed: %d\n", len(tmpls))
 
 	s := spinner.New("Deploying application '" + opts.Name + "'...")
 	s.Start(ctx)
 
-	existingPods, err := helpers.CheckExistingPodsForApplication(p.runtime, opts.Name)
-	if err != nil {
-		return fmt.Errorf("failed while checking existing pods for application: %w", err)
-	}
-
 	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 
 	// execute the pod Templates
-	if err := p.executePodTemplates(tp, opts.Name, appMetadata, tmpls, pciAddresses, existingPods, opts.ValuesFiles, opts.ArgParams); err != nil {
+	if err := p.executePodTemplates(ctx, tp, opts.Name, appMetadata, tmpls, pciAddresses, existingResources, opts.ValuesFiles, opts.ArgParams); err != nil {
 		return err
 	}
 
@@ -176,8 +172,8 @@ func (p *PodmanApplication) downloadModels(ctx context.Context, templateName, ap
 
 	for _, model := range models {
 		s.UpdateMessage("Downloading model: " + model + "...")
-		err = utils.Retry(vars.RetryCount, vars.RetryInterval, nil, func() error {
-			return helpers.DownloadModel(model, vars.ModelDirectory)
+		err = utils.Retry(ctx, vars.RetryCount, vars.RetryInterval, nil, func() error {
+			return helpers.DownloadModel(model, utils.GetModelsPath())
 		})
 		if err != nil {
 			s.Fail("failed to download model: " + model)
@@ -234,7 +230,7 @@ func (p *PodmanApplication) calculateReqSpyreCards(tp templates.Template, podTem
 		}
 
 		if exists {
-			logger.Infof("Pod %s already exists, skipping spyre cards calculation", podSpec.Name, logger.VerbosityLevelDebug)
+			logger.Debugf("Pod %s already exists, skipping spyre cards calculation", podSpec.Name)
 
 			continue
 		}
@@ -300,7 +296,7 @@ func (p *PodmanApplication) downloadImagesForTemplate(templateName, appName stri
 	return img.Run(imagePullPolicy)
 }
 
-func (p *PodmanApplication) executePodTemplates(tp templates.Template,
+func (p *PodmanApplication) executePodTemplates(ctx context.Context, tp templates.Template,
 	appName string, appMetadata *templates.AppMetadata,
 	tmpls map[string]*template.Template, pciAddresses []string, existingPods []string,
 	valuesFiles []string, argParams map[string]string) error {
@@ -314,6 +310,7 @@ func (p *PodmanApplication) executePodTemplates(tp templates.Template,
 		"AppName":         appName,
 		"AppTemplateName": appMetadata.Name,
 		"Version":         appMetadata.Version,
+		"BaseDir":         utils.GetBaseDir(),
 		"Values":          values,
 		// Key -> container name
 		// Value -> range of key-value env pairs
@@ -332,7 +329,7 @@ func (p *PodmanApplication) executePodTemplates(tp templates.Template,
 			wg.Add(1)
 			go func(t string) {
 				defer wg.Done()
-				if err := p.executePodTemplateLayer(tp, tmpls, globalParams, pciAddresses, existingPods, podTemplateName, appName, valuesFiles, argParams); err != nil {
+				if err := p.executePodTemplateLayer(ctx, tp, tmpls, globalParams, pciAddresses, existingPods, podTemplateName, appName, valuesFiles, argParams); err != nil {
 					errCh <- err
 				}
 			}(podTemplateName)
@@ -358,7 +355,7 @@ func (p *PodmanApplication) executePodTemplates(tp templates.Template,
 	return nil
 }
 
-func (p *PodmanApplication) executePodTemplateLayer(tp templates.Template, tmpls map[string]*template.Template,
+func (p *PodmanApplication) executePodTemplateLayer(ctx context.Context, tp templates.Template, tmpls map[string]*template.Template,
 	globalParams map[string]any, pciAddresses []string, existingPods []string, podTemplateName, appName string,
 	valuesFiles []string, argParams map[string]string) error {
 	logger.Infof("'%s': Processing template...\n", podTemplateName)
@@ -399,7 +396,7 @@ func (p *PodmanApplication) executePodTemplateLayer(tp templates.Template, tmpls
 	reader := bytes.NewReader(rendered.Bytes())
 
 	// Deploy the Pod and do Readiness check
-	if err := clipodman.DeployPodAndReadinessCheck(p.runtime, podSpec, podTemplateName, reader, clipodman.ConstructPodDeployOptions(podAnnotations)); err != nil {
+	if err := clipodman.DeployPodAndReadinessCheck(ctx, p.runtime, podSpec, podTemplateName, reader, clipodman.ConstructPodDeployOptions(podAnnotations)); err != nil {
 		return fmt.Errorf("'%s': Failed to deploy pod and do readiness check: %w", podTemplateName, err)
 	}
 

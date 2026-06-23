@@ -10,12 +10,21 @@ import (
 )
 
 type AppMetadata struct {
-	Name                  string           `yaml:"name,omitempty"`
-	Description           string           `yaml:"description,omitempty"`
-	Hidden                bool             `yaml:"hidden,omitempty"`
-	Version               string           `yaml:"version,omitempty"`
-	PodTemplateExecutions [][]string       `yaml:"podTemplateExecutions"`
-	Openshift             OpenshiftRuntime `yaml:"openshift,omitempty"`
+	Name                  string            `yaml:"name,omitempty"`
+	Description           string            `yaml:"description,omitempty"`
+	Hidden                bool              `yaml:"hidden,omitempty"`
+	Version               string            `yaml:"version,omitempty"`
+	PodTemplateExecutions [][]string        `yaml:"podTemplateExecutions"`
+	Openshift             OpenshiftRuntime  `yaml:"openshift,omitempty"`
+	Resources             *RuntimeResources `yaml:"resources,omitempty"`
+}
+
+// RuntimeResources represents resource requirements in runtime-specific metadata.
+type RuntimeResources struct {
+	CPU          int            `yaml:"cpu,omitempty"`          // CPU cores
+	Memory       int            `yaml:"memory,omitempty"`       // Memory in bytes
+	Storage      int            `yaml:"storage,omitempty"`      // Storage in bytes
+	Accelerators map[string]int `yaml:"accelerators,omitempty"` // Accelerator cards (e.g., "ibm.com/spyre_pf": 1)
 }
 
 type OpenshiftRuntime struct {
@@ -56,18 +65,18 @@ type Template interface {
 	ListApplicationTemplateValues(app string) (map[string]string, error)
 	// LoadAllTemplates loads all templates for a given application
 	LoadAllTemplates(app string) (map[string]*template.Template, error)
-	// LoadPodTemplate loads and renders a pod template with the given parameters
-	LoadPodTemplate(app, file string, params any) (*models.PodSpec, error)
 	// LoadPodTemplateWithValues loads and renders a pod template with values from application
 	LoadPodTemplateWithValues(app, file, appName string, valuesFileOverrides []string, cliOverrides map[string]string) (*models.PodSpec, error)
+	// LoadValues loads the values for a given template
 	LoadValues(app string, valuesFileOverrides []string, cliOverrides map[string]string) (map[string]interface{}, error)
 	// LoadMetadata loads the metadata for a given application template
-	LoadMetadata(app string, isRuntime bool) (*AppMetadata, error)
+	// target: pointer to the struct where metadata should be unmarshaled (e.g., *AppMetadata, *types.Service, *types.Architecture)
+	LoadMetadata(app string, isRuntime bool, target interface{}) error
 	// LoadMdFiles loads all md files for a given application
 	LoadMdFiles(app string) (map[string]*template.Template, error)
 	// LoadVarsFile loads the var template file
 	LoadVarsFile(app string, params map[string]string) (*Vars, error)
-	// LoadVarsFile loads the Chart
+	// LoadChart loads the Chart
 	LoadChart(app string) (chart.Charter, error)
 	// LoadYamls loads the yaml in assests dir
 	LoadYamls(folder string) ([][]byte, error)

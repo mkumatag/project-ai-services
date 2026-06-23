@@ -2,80 +2,36 @@ package configure
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 
 	catalogPodman "github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure/podman"
-	"github.com/project-ai-services/ai-services/internal/pkg/constants"
+	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
-	"golang.org/x/crypto/pbkdf2"
 )
-
-const (
-	defaultPasswordIterations = 100000
-)
-
-// ConfigureOptions contains the configuration for configuring the catalog service.
-type ConfigureOptions struct {
-	AdminPassword string
-	Runtime       types.RuntimeType
-	ArgParams     map[string]string
-}
 
 // Run executes the configure process for the catalog service.
-func Run(opts ConfigureOptions) error {
+// It creates runtime-specific options and calls the appropriate runtime implementation.
+func Run(runtime types.RuntimeType, baseDir, domainName, sslCertPath, sslKeyPath string, httpsPort int) error {
 	ctx := context.Background()
-
-	// Generate password hash using PBKDF2
-	passwordHash, err := hashPasswordPBKDF2(opts.AdminPassword, defaultPasswordIterations)
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	// Convert passwordHash to base64 encoded text for Kubernetes/Podman secret
-	passwordHashBase64 := base64.StdEncoding.EncodeToString([]byte(passwordHash))
-
 	// Deploy catalog service based on runtime
-	switch opts.Runtime {
+	switch runtime {
 	case types.RuntimeTypePodman:
-		// Determine Podman URI
-		podmanURI := getPodmanURI()
+		opts := catalogUtils.PodmanConfigureOptions{
+			BaseDir:     baseDir,
+			DomainName:  domainName,
+			SSLCertPath: sslCertPath,
+			SSLKeyPath:  sslKeyPath,
+			HttpsPort:   httpsPort,
+		}
 
-		return catalogPodman.DeployCatalog(ctx, podmanURI, passwordHashBase64, opts.ArgParams)
+		return catalogPodman.DeployCatalog(ctx, opts)
 
 	case types.RuntimeTypeOpenShift:
 		return fmt.Errorf("openshift runtime is not yet supported for catalog configure")
 
 	default:
-		return fmt.Errorf("unsupported runtime type: %s", opts.Runtime)
+		return fmt.Errorf("unsupported runtime type: %s", runtime)
 	}
-}
-
-// getPodmanURI determines the Podman socket URI.
-func getPodmanURI() string {
-	// TODO: Need to take care for getting rootless socket
-	// Return default local Unix socket
-	return "/run/podman/podman.sock"
-}
-
-// hashPasswordPBKDF2 generates a PBKDF2 hash of the password with a random salt.
-func hashPasswordPBKDF2(password string, iteration int) (string, error) {
-	salt := make([]byte, constants.Pbkdf2SaltLen)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-
-	hash := pbkdf2.Key([]byte(password), salt, iteration, constants.Pbkdf2KeyLen, sha256.New)
-
-	// Format: iterations.salt.hash (base64 encoded)
-	encoded := fmt.Sprintf("%d.%s.%s",
-		iteration,
-		base64.RawStdEncoding.EncodeToString(salt),
-		base64.RawStdEncoding.EncodeToString(hash))
-
-	return encoded, nil
 }
 
 // Made with Bob

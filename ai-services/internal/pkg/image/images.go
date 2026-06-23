@@ -1,6 +1,7 @@
 package image
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -83,7 +84,7 @@ func (img *Images) Run(policy ImagePullPolicy) error {
 	case PullAlways:
 		return img.always(images)
 	case PullIfNotPresent:
-		return img.ifNotPresent(images)
+		return img.IfNotPresent(images)
 	case PullNever:
 		return img.never(images)
 	default:
@@ -93,31 +94,33 @@ func (img *Images) Run(policy ImagePullPolicy) error {
 
 // always -> pulls all the images for a given app template.
 func (img *Images) always(images []string) error {
-	logger.Infoln("Downloading container images required for application template " + img.AppTemplate + ":")
+	ctx := context.Background()
+	logger.InfolnCtx(ctx, "Downloading container images required for application template "+img.AppTemplate+":")
 
-	return pullImageFromRegistry(img.Runtime, images)
+	return PullImageFromRegistry(ctx, img.Runtime, images)
 }
 
-// ifNotPresent -> pulls only the missing images for a given app template.
-func (img *Images) ifNotPresent(images []string) error {
-	notFoundImages, err := fetchImagesNotFound(img.Runtime, images)
+// IfNotPresent pulls only the missing images for a given app template.
+func (img *Images) IfNotPresent(images []string) error {
+	notFoundImages, err := FetchImagesNotFound(img.Runtime, images)
 	if err != nil {
 		return err
 	}
 
 	if len(notFoundImages) == 0 {
-		logger.Infoln("All required container images are already present locally.")
+		ctx := context.Background()
+		logger.InfolnCtx(ctx, "All required container images are already present locally.")
 
 		return nil
 	}
 
-	return pullImageFromRegistry(img.Runtime, notFoundImages)
+	return PullImageFromRegistry(context.Background(), img.Runtime, notFoundImages)
 }
 
 // never -> never pulls any image.
 // It checks whether all the images for given appTemplate is present locally, if not then raises an error.
 func (img *Images) never(images []string) error {
-	notFoundImages, err := fetchImagesNotFound(img.Runtime, images)
+	notFoundImages, err := FetchImagesNotFound(img.Runtime, images)
 	if err != nil {
 		return err
 	}
@@ -126,7 +129,7 @@ func (img *Images) never(images []string) error {
 		return fmt.Errorf("some required images are not present locally: %v. Either pull the image manually or rerun create command without --image-pull-policy or --skip-image-download flag", notFoundImages)
 	}
 
-	logger.Infoln("All required container images are present locally.")
+	logger.InfolnCtx(context.Background(), "All required container images are present locally.")
 
 	return nil
 }

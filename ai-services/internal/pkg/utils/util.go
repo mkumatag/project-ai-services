@@ -1,13 +1,21 @@
 package utils
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"net"
 	"os"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/go-resty/resty/v2"
+	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/openshift"
 	"go.yaml.in/yaml/v3"
@@ -33,7 +41,14 @@ func BoolPtr(v bool) *bool {
 
 // FlattenArray takes a 2D slice and returns a 1D slice with all values.
 func FlattenArray[T comparable](arr [][]T) []T {
-	flatArr := []T{}
+	// Calculate total capacity needed
+	totalLen := 0
+	for _, row := range arr {
+		totalLen += len(row)
+	}
+
+	// Preallocate slice with exact capacity
+	flatArr := make([]T, 0, totalLen)
 
 	for _, row := range arr {
 		flatArr = append(flatArr, row...)
@@ -162,6 +177,72 @@ func getDescription(n *yaml.Node) string {
 	desc := comment[idx+len("@description"):]
 
 	return strings.TrimSpace(desc)
+}
+
+// NodeProcessor is a function type for processing individual yaml nodes.
+// It receives the key node, value node, and returns an error if processing fails.
+type NodeProcessor func(keyNode, valueNode *yaml.Node) error
+
+// ProcessYAMLNode recursively processes a yaml.Node tree with a custom processor function.
+// This is a generic traversal function that can be used for various node processing tasks.
+// TODO: Utilize this new helper method to process any HeadCommentNodes and remove the older methods.
+func ProcessYAMLNode(node *yaml.Node, processor NodeProcessor) error {
+	if node == nil {
+		return nil
+	}
+
+	switch node.Kind {
+	case yaml.DocumentNode:
+		return processDocumentNode(node, processor)
+	case yaml.MappingNode:
+		return processMappingNode(node, processor)
+	case yaml.SequenceNode:
+		return processSequenceNode(node, processor)
+	}
+
+	return nil
+}
+
+// processDocumentNode processes a document node by recursively processing its children.
+func processDocumentNode(node *yaml.Node, processor NodeProcessor) error {
+	for _, child := range node.Content {
+		if err := ProcessYAMLNode(child, processor); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// processMappingNode processes a mapping node by applying the processor to each key-value pair.
+func processMappingNode(node *yaml.Node, processor NodeProcessor) error {
+	for i := 0; i < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valueNode := node.Content[i+1]
+
+		// Apply processor to this key-value pair
+		if err := processor(keyNode, valueNode); err != nil {
+			return err
+		}
+
+		// Recursively process nested structures
+		if err := ProcessYAMLNode(valueNode, processor); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// processSequenceNode processes a sequence node by recursively processing its children.
+func processSequenceNode(node *yaml.Node, processor NodeProcessor) error {
+	for _, child := range node.Content {
+		if err := ProcessYAMLNode(child, processor); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func FlattenNode(prefix string, n *yaml.Node, descMap map[string]string) {
@@ -373,4 +454,249 @@ func FlattenMapToKeys(m map[string]any, prefix string) map[string]string {
 	}
 
 	return result
+}
+
+// FlattenMapWithValues converts a nested map into a flat map with dotted keys and string values.
+// Unlike FlattenMapToKeys which returns empty strings, this converts actual values to strings.
+// Example: {"ui": {"port": 8080}, "items": [1,2,3]} -> {"ui.port": "8080", "items": "1,2,3"}.
+func FlattenMapWithValues(m map[string]any, prefix string) map[string]string {
+	result := make(map[string]string)
+	for key, val := range m {
+		fullKey := key
+		if prefix != "" {
+			fullKey = prefix + "." + key
+		}
+
+		switch v := val.(type) {
+		case map[string]any:
+			// Recursively flatten nested maps
+			nested := FlattenMapWithValues(v, fullKey)
+			maps.Copy(result, nested)
+		case string:
+			result[fullKey] = v
+		case int, int64, float64, bool:
+			result[fullKey] = fmt.Sprintf("%v", v)
+		case []interface{}:
+			// For arrays, convert to comma-separated string
+			strArr := make([]string, len(v))
+			for i, item := range v {
+				strArr[i] = fmt.Sprintf("%v", item)
+			}
+			result[fullKey] = strings.Join(strArr, ",")
+		default:
+			// For other types, use fmt.Sprintf
+			result[fullKey] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	return result
+}
+
+// GetEnv retrieves an environment variable or returns a default value if not set.
+func GetEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+
+	return defaultValue
+}
+
+// GetBaseDir returns the base directory from environment variable or default.
+func GetBaseDir() string {
+	baseDir := constants.DefaultBaseDir
+	if dir := os.Getenv("AI_SERVICES_BASE_DIR"); dir != "" {
+		baseDir = dir
+	}
+
+	return baseDir
+}
+
+// GetApplicationsPath returns the applications path based on the configured base directory.
+func GetApplicationsPath() string {
+	return filepath.Join(GetBaseDir(), "applications")
+}
+
+// GetModelsPath returns the models path based on the configured base directory.
+func GetModelsPath() string {
+	return filepath.Join(GetBaseDir(), "models")
+}
+
+// ValidateBaseDir validates that the base directory exists or can be created.
+// It always appends 'ai-services' subdirectory to the provided base directory for all AI services content.
+func ValidateBaseDir(baseDir string) (string, error) {
+	// Clean the path and append ai-services subdirectory
+	baseDir = filepath.Join(filepath.Clean(baseDir), "ai-services")
+
+	// Check if directory exists or can be created
+	if err := os.MkdirAll(baseDir, constants.DirPerm); err != nil {
+		return "", fmt.Errorf("cannot create directory: %w", err)
+	}
+
+	return baseDir, nil
+}
+
+func CreateDir(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err := os.MkdirAll(path, constants.DirPerm)
+		if err != nil {
+			return fmt.Errorf("failed to create target directory: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func ResolvePodmanURI() (string, error) {
+	if v, found := os.LookupEnv("CONTAINER_HOST"); found {
+		return v, nil
+	}
+
+	if os.Geteuid() == 0 {
+		return getPodmanURIAsRoot()
+	}
+
+	return fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid()), nil
+}
+
+// getPodmanURIAsRoot determines the appropriate Podman socket URI when running with root privileges.
+// If the process was elevated via sudo (SUDO_USER is set), it returns the socket path
+// for the original user's rootless Podman instance to maintain user context.
+// Otherwise, it returns the system-wide root Podman socket path.
+func getPodmanURIAsRoot() (string, error) {
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser == "" {
+		return "unix:///run/podman/podman.sock", nil
+	}
+
+	u, err := user.Lookup(sudoUser)
+	if err != nil {
+		return "", fmt.Errorf("failed to lookup user %s: %w", sudoUser, err)
+	}
+
+	return fmt.Sprintf(
+		"unix:///run/user/%s/podman/podman.sock",
+		u.Uid,
+	), nil
+}
+
+// GetAuthFilePath determines the auth.json file path based on the current user.
+// Returns the path to the Podman auth.json file for container registry authentication.
+func GetAuthFilePath() (string, error) {
+	if os.Geteuid() == 0 {
+		return "/run/user/0/containers/auth.json", nil
+	}
+
+	return fmt.Sprintf("/run/user/%d/containers/auth.json", os.Getuid()), nil
+}
+
+// ExtractTarGz extracts a tar.gz file to a destination directory.
+func ExtractTarGz(srcFile, destDir string) error {
+	file, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = gzr.Close()
+	}()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		if err := extractTarEntry(tr, header, destDir); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// extractTarEntry extracts a single tar entry.
+func extractTarEntry(tr *tar.Reader, header *tar.Header, destDir string) error {
+	// Get the absolute path of the destination directory
+	destPath, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for destination: %w", err)
+	}
+
+	// Join the paths. filepath.Join automatically calls filepath.Clean
+	target := filepath.Join(destPath, header.Name)
+
+	// ZIP SLIP FIX: Check if the resolved target path falls outside the destination directory
+	if !strings.HasPrefix(target, destPath+string(os.PathSeparator)) && target != destPath {
+		return fmt.Errorf("illegal file path in archive: %s", header.Name)
+	}
+
+	switch header.Typeflag {
+	case tar.TypeDir:
+		if err := os.MkdirAll(target, constants.DirPerm); err != nil {
+			return err
+		}
+	case tar.TypeReg:
+		if err := os.MkdirAll(filepath.Dir(target), constants.DirPerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.Create(target)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = outFile.Close()
+		}()
+
+		if _, err := io.Copy(outFile, tr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ErrorResponse represents an error response.
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+// ParseErrorResponse attempts to parse the error response from the API.
+// It returns the error message if successfully parsed, otherwise returns the raw response body.
+func ParseErrorResponse(resp *resty.Response) string {
+	var errResp ErrorResponse
+	if err := json.Unmarshal(resp.Body(), &errResp); err == nil && errResp.Error != "" {
+		return errResp.Error
+	}
+
+	return resp.String()
+}
+
+// GetNumericValFromMap safely extracts a numeric value from a map as an integer, returning 0 if not found or not a number.
+// Handles both int and float64 types from JSON unmarshaling.
+func GetNumericValFromMap(m map[string]interface{}, key string) int {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case int:
+			return v
+		case float64:
+			return int(v)
+		case int64:
+			return int(v)
+		}
+	}
+
+	return 0
 }

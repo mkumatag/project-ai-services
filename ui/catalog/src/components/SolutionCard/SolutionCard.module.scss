@@ -1,0 +1,95 @@
+@use "@carbon/react/scss/spacing";
+@use "@carbon/react/scss/type";
+@use "@carbon/react/scss/motion";
+
+.card {
+  background-color: var(--cds-layer);
+  padding: spacing.$spacing-05;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+
+  &:hover,
+  &:focus,
+  &:active,
+  &:visited {
+    text-decoration: none !important;
+    color: inherit !important;
+    outline: none !important;
+  }
+
+  &:hover {
+    background-color: var(--cds-layer-hover);
+  }
+
+  :global(.cds--popover) {
+    z-index: 8500;
+  }
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: spacing.$spacing-05;
+}
+
+.iconContainer {
+  flex-shrink: 0;
+  color: var(--cds-icon-primary);
+
+  svg {
+    display: block;
+  }
+}
+
+.indicatorIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--cds-support-success);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.category {
+  @include type.type-style("label-01");
+  color: var(--cds-text-secondary);
+  margin: 0 0 spacing.$spacing-02 0;
+}
+
+.title {
+  @include type.type-style("heading-03");
+  margin: 0 0 spacing.$spacing-03 0;
+}
+
+.description {
+  @include type.type-style("body-compact-01");
+  margin: 0 0 spacing.$spacing-05 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.tags {
+  display: flex;
+  gap: spacing.$spacing-03;
+  align-items: center;
+  flex-wrap: wrap;
+}

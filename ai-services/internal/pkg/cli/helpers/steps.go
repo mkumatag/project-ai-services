@@ -2,7 +2,9 @@ package helpers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"text/template"
 
@@ -23,7 +25,30 @@ const (
 func PrintNextSteps(tp templates.Template, runtime runtime.Runtime, app, appTemplate string) error {
 	params := map[string]string{"AppName": app}
 	if err := renderStepsMarkdown(tp, runtime, appTemplate, params, nextStepsMDFile, nextStepsTitle); err != nil {
-		logger.Infof("Unable to load steps: %v\n", err)
+		logger.InfofCtx(context.Background(), "Unable to load steps: %v\n", err)
+
+		return nil
+	}
+
+	return nil
+}
+
+// PrintNextStepsWithProxy prints next steps with proxy route information.
+func PrintNextStepsWithProxy(tp templates.Template, runtime runtime.Runtime, app, appTemplate string, routeDomains map[string]string, httpsPort string) error {
+	params := map[string]string{"AppName": app}
+
+	// Add route domains to params
+	for key, value := range routeDomains {
+		params[key] = value
+	}
+
+	// Add HTTPS port to params if provided
+	if httpsPort != "" {
+		params["HTTPS_PORT"] = httpsPort
+	}
+
+	if err := renderStepsMarkdown(tp, runtime, appTemplate, params, nextStepsMDFile, nextStepsTitle); err != nil {
+		logger.InfofCtx(context.Background(), "Unable to load steps: %v\n", err)
 
 		return nil
 	}
@@ -34,7 +59,28 @@ func PrintNextSteps(tp templates.Template, runtime runtime.Runtime, app, appTemp
 func PrintInfo(tp templates.Template, runtime runtime.Runtime, app, appTemplate string) error {
 	params := map[string]string{"AppName": app}
 	if err := renderStepsMarkdown(tp, runtime, appTemplate, params, infoMDFile, infoTitle); err != nil {
-		logger.Infof("Unable to load steps: %v\n", err)
+		logger.InfofCtx(context.Background(), "Unable to load steps: %v\n", err)
+
+		return nil
+	}
+
+	return nil
+}
+
+// PrintInfoWithProxy prints info with proxy route information.
+func PrintInfoWithProxy(tp templates.Template, runtime runtime.Runtime, app, appTemplate string, routeDomains map[string]string, httpsPort string) error {
+	params := map[string]string{"AppName": app}
+
+	// Add route domains to params
+	maps.Copy(params, routeDomains)
+
+	// Add HTTPS port to params if provided
+	if httpsPort != "" {
+		params["HTTPS_PORT"] = httpsPort
+	}
+
+	if err := renderStepsMarkdown(tp, runtime, appTemplate, params, infoMDFile, infoTitle); err != nil {
+		logger.InfofCtx(context.Background(), "Unable to load steps: %v\n", err)
 
 		return nil
 	}
@@ -80,7 +126,7 @@ func populatePodInfo(runtime runtime.Runtime, params map[string]string, varsData
 		}
 		if !exists {
 			// just print the msg
-			logger.Infof("Pod with name: %s doesn't exist\n", pod.Name)
+			logger.InfofCtx(context.Background(), "Pod with name: %s doesn't exist\n", pod.Name)
 
 			continue
 		}
@@ -94,7 +140,7 @@ func populatePodInfo(runtime runtime.Runtime, params map[string]string, varsData
 		result, err := fetchDataSpecificInfo(pInfo, pod.Format, pod.Default)
 		if err != nil {
 			// just print the msg
-			logger.Errorf("failed to fetch podInfo for pod: %s with err: %v\n", pod.Name, err)
+			logger.ErrorfCtx(context.Background(), "failed to fetch podInfo for pod: %s with err: %v\n", pod.Name, err)
 
 			continue
 		}
@@ -116,7 +162,7 @@ func populateContainerInfo(runtime runtime.Runtime, params map[string]string, va
 		}
 		if !exists {
 			// just print the msg
-			logger.Infof("Container with name: %s doesn't exist\n", container.Name)
+			logger.InfofCtx(context.Background(), "Container with name: %s doesn't exist\n", container.Name)
 
 			continue
 		}
@@ -130,7 +176,7 @@ func populateContainerInfo(runtime runtime.Runtime, params map[string]string, va
 		result, err := fetchDataSpecificInfo(cInfo, container.Format, container.Default)
 		if err != nil {
 			// just print the msg
-			logger.Errorf("failed to fetch podInfo for pod: %s with err: %v\n", container.Name, err)
+			logger.ErrorfCtx(context.Background(), "failed to fetch podInfo for pod: %s with err: %v\n", container.Name, err)
 
 			continue
 		}
@@ -208,10 +254,11 @@ func renderStepsMarkdown(tp templates.Template, runtime runtime.Runtime, appTemp
 		return fmt.Errorf("failed to execute info.md: %w", err)
 	}
 
-	logger.Infoln(title + ":")
-	logger.Infoln("-------")
-	logger.Infoln(rendered.String())
-	logger.Infoln("") // Add Empty line after printing steps
+	ctx := context.Background()
+	logger.InfolnCtx(ctx, title+":")
+	logger.InfolnCtx(ctx, "-------")
+	logger.InfolnCtx(ctx, rendered.String())
+	logger.InfolnCtx(ctx, "") // Add Empty line after printing steps
 
 	return nil
 }

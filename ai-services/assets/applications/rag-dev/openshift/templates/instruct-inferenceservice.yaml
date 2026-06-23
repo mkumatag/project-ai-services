@@ -20,12 +20,19 @@ spec:
     model:
       args:
       - '--tensor-parallel-size=4 '
-      - '--max-model-len=32768 '
-      - --max-num-seqs=32
-      - --served-model-name=ibm-granite/granite-3.3-8b-instruct
+      - '--max-model-len={{ .Values.instruct.model.maxModelLen }} '
+      - '--max-num-seqs={{ .Values.instruct.model.maxBatchSize }}'
+      - --served-model-name={{ .Values.instruct.model.name }}
       env:
       - name: VLLM_SPYRE_USE_CB
         value: "1"
+      {{- if .Values.instruct.apiKey }}
+      - name: VLLM_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: vllm-instruct-api-key
+            key: apiKey
+      {{- end }}
       modelFormat:
         name: vLLM
       resources:

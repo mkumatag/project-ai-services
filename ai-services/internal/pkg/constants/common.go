@@ -6,14 +6,41 @@ const (
 	AIServices           = "ai-services"
 	PodStartOn           = "on"
 	PodStartOff          = "off"
-	ApplicationsPath     = "/var/lib/ai-services/applications"
 	OperatorPollInterval = 5 * time.Second
 	OperatorPollTimeout  = 3 * time.Minute
 	VersionV2            = "v2"
 	DSCKind              = "DataScienceCluster"
 	DSCIKind             = "DSCInitialization"
 	SMTLevel             = 2
+	ErrSecretNotFound    = "no secret with name or id"
+	CaddyServerName      = "ai_services" // Caddy server name used for route registration
 )
+
+const (
+	DirPerm  = 0755
+	FilePerm = 0644
+)
+
+// Ulimit configuration constants.
+const (
+	MinNofileLimit        = 134217728
+	NofileFieldCount      = 4
+	MemlockConfFile       = "/etc/security/limits.d/memlock.conf"
+	NofileConfFile        = "/etc/security/limits.conf"
+	MemlockConfContent    = "@sentient - memlock unlimited\n"
+	NofileConfTemplate    = "@sentient hard nofile %d\n"
+	SentientGroupName     = "sentient"
+	ExpectedMemlockConfig = "@sentient - memlock unlimited"
+	ExpectedNofileConfig  = "@sentient hard nofile 134217728"
+)
+
+const (
+	PercentageDivisor = 100.0
+)
+
+// DefaultBaseDir is the single source of truth for the default base directory.
+// Change this constant to update the default directory everywhere in the application.
+const DefaultBaseDir = "/var/lib/ai-services"
 
 // OperatorConfig defines configuration for an operator.
 type OperatorConfig struct {

@@ -1,5 +1,511 @@
 basePath: /api/v1
 definitions:
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Component:
+    properties:
+      component_type:
+        type: string
+      instance_id:
+        type: string
+      params:
+        additionalProperties: {}
+        type: object
+      provider_id:
+        type: string
+      version:
+        type: string
+    required:
+    - component_type
+    - provider_id
+    - version
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.CreateApplicationRequest:
+    properties:
+      catalog_id:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 3
+        type: string
+      services:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Service'
+        type: array
+      version:
+        type: string
+    required:
+    - catalog_id
+    - name
+    - services
+    - version
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.CreateApplicationResponse:
+    properties:
+      id:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Service:
+    properties:
+      catalog_id:
+        type: string
+      components:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Component'
+        type: array
+      params:
+        additionalProperties: {}
+        description: Service-level parameters
+        type: object
+      version:
+        type: string
+    required:
+    - catalog_id
+    - components
+    - version
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_repository.DeleteApplicationResponse:
+    properties:
+      id:
+        type: string
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Application:
+    properties:
+      catalog_id:
+        type: string
+      created_at:
+        type: string
+      deployment_type:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      name:
+        type: string
+      services:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationService'
+        type: array
+      status:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationCPUInfo:
+    properties:
+      total_cores:
+        description: Total allocated CPU cores
+        type: number
+      used_cores:
+        description: Actually used CPU cores
+        type: number
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Application'
+        type: array
+      pagination:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.PaginationMetadata'
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationMemInfo:
+    properties:
+      total_bytes:
+        description: Total allocated memory in bytes
+        type: integer
+      used_bytes:
+        description: Actually used memory in bytes
+        type: integer
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationPSResponse:
+    properties:
+      components:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Pod'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      services:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Pod'
+        type: array
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationResourcesResponse:
+    properties:
+      accelerators:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      cpu:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationCPUInfo'
+      memory:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationMemInfo'
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationService:
+    properties:
+      catalog_id:
+        type: string
+      components:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ServiceComponentResp'
+        type: array
+      created_at:
+        type: string
+      endpoints:
+        items:
+          additionalProperties: {}
+          type: object
+        type: array
+      id:
+        type: string
+      message:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Architecture:
+    properties:
+      certified_by:
+        type: string
+      description:
+        type: string
+      global_components:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ComponentReference'
+        type: array
+      id:
+        type: string
+      links:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ArchitectureLinks'
+      name:
+        type: string
+      runtimes:
+        items:
+          type: string
+        type: array
+      services:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ServiceReference'
+        type: array
+      type:
+        description: '"architecture"'
+        type: string
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ArchitectureLinks:
+    properties:
+      code:
+        type: string
+      demo:
+        type: string
+      documentation:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ArchitectureSummary:
+    properties:
+      certified_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      services:
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ComponentReference:
+    properties:
+      type:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DependencyReference:
+    properties:
+      id:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsArchitecture:
+    properties:
+      global_components:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsComponent'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      services:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsService'
+        type: array
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsComponent:
+    properties:
+      name:
+        type: string
+      providers:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsProvider'
+        type: array
+      type:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsProvider:
+    properties:
+      default:
+        type: boolean
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      resources:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Resources'
+      schema:
+        type: string
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsService:
+    properties:
+      components:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsComponent'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      resources:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Resources'
+      schema:
+        type: string
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.PaginationMetadata:
+    properties:
+      has_next:
+        type: boolean
+      has_prev:
+        type: boolean
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total_items:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Pod:
+    properties:
+      containers:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.PodContainer'
+        type: array
+      created:
+        type: string
+      healthy:
+        type: boolean
+      pod_id:
+        type: string
+      pod_name:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Status'
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.PodContainer:
+    properties:
+      healthy:
+        type: boolean
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Status'
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ProviderInfo:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Resources:
+    properties:
+      accelerators:
+        additionalProperties:
+          type: integer
+        description: 'Accelerator cards (e.g., "ibm.com/spyre_pf": 1)'
+        type: object
+      cpu:
+        description: CPU cores
+        type: integer
+      memory:
+        description: Memory in bytes
+        type: integer
+      storage:
+        description: Storage in bytes
+        type: integer
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Service:
+    properties:
+      architectures:
+        items:
+          type: string
+        type: array
+      certified_by:
+        type: string
+      dependencies:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DependencyReference'
+        type: array
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      standalone:
+        type: boolean
+      type:
+        description: '"service"'
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ServiceComponentResp:
+    properties:
+      id:
+        type: string
+      message:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      provider:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ProviderInfo'
+      status:
+        type: string
+      type:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ServiceReference:
+    properties:
+      id:
+        type: string
+      optional:
+        type: boolean
+      version:
+        type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ServiceSummary:
+    properties:
+      architectures:
+        items:
+          type: string
+        type: array
+      certified_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      standalone:
+        type: boolean
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Status:
+    enum:
+    - waiting
+    - running
+    - terminated
+    - created
+    - paused
+    - restarting
+    - exited
+    - removing
+    - dead
+    type: string
+    x-enum-varnames:
+    - Waiting
+    - Running
+    - Terminated
+    - Created
+    - Paused
+    - Restarting
+    - Exited
+    - Removing
+    - Dead
+  github_com_project-ai-services_ai-services_internal_pkg_models.AcceleratorInfo:
+    properties:
+      available:
+        type: integer
+      total:
+        type: integer
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_models.CPUInfo:
+    properties:
+      available_cores:
+        type: number
+      total_cores:
+        type: integer
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_models.MemoryInfo:
+    properties:
+      available_bytes:
+        type: integer
+      total_bytes:
+        type: integer
+    type: object
+  internal_pkg_catalog_apiserver_handlers.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  internal_pkg_catalog_apiserver_handlers.ResourcesResponse:
+    properties:
+      accelerators:
+        additionalProperties:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_models.AcceleratorInfo'
+        type: object
+      cpu:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_models.CPUInfo'
+      memory:
+        $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_models.MemoryInfo'
+    type: object
+  internal_pkg_catalog_apiserver_handlers.UpdateApplicationRequest:
+    properties:
+      name:
+        maxLength: 100
+        minLength: 3
+        type: string
+    required:
+    - name
+    type: object
   internal_pkg_catalog_apiserver_handlers.loginReq:
     properties:
       password:
@@ -32,202 +538,393 @@ info:
   version: "1.0"
 paths:
   /applications:
-    post:
-      consumes:
-      - application/json
-      description: Create a new application instance from a template
+    get:
+      description: Retrieves a paginated list of all applications for the authenticated
+        user with optional filters
+      parameters:
+      - default: 1
+        description: Page number (1-indexed)
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 'Number of items per page (max: 100)'
+        in: query
+        name: page_size
+        type: integer
+      - description: 'Filter by deployment type: ''architectures'' or ''services'''
+        in: query
+        name: deployment_type
+        type: string
+      - description: Filter by catalog ID (e.g., 'rag', 'chat', 'digitize', 'summarize')
+        in: query
+        name: catalog_id
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: Application created
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationListResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List applications
+      tags:
+      - Applications
+    post:
+      consumes:
+      - application/json
+      description: Creates a new application (architecture or service) with optional
+        custom parameters
+      parameters:
+      - description: Application creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.CreateApplicationRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Application creation initiated
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.CreateApplicationResponse'
+        "400":
+          description: Invalid request body or validation errors
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "409":
+          description: Application name already exists
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "422":
+          description: Parameter validation failed or invalid template
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create new application
       tags:
       - Applications
-  /applications/{name}:
+  /applications/{id}:
     delete:
-      description: Delete a specific application and all its resources
+      description: Initiates async deletion of an application and all its resources.
+        Returns 202 immediately.
       parameters:
-      - description: Application name
+      - description: Application ID (UUID)
         in: path
-        name: name
+        name: id
         required: true
         type: string
+      - description: 'When ''true'', preserves underlying data (volumes of databases/service
+          resources). Default: ''false'''
+        in: query
+        name: keep_data
+        type: string
+      produces:
+      - application/json
       responses:
-        "200":
-          description: Application deleted
+        "202":
+          description: Accepted
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_repository.DeleteApplicationResponse'
+        "400":
+          description: Invalid application ID or keep_data parameter
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "403":
+          description: User doesn't own this application
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
         "404":
           description: Application not found
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "409":
+          description: Application is already being deleted
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete application
       tags:
       - Applications
     get:
-      description: Get detailed information about a specific application
+      description: Retrieves a single application by its unique identifier for the
+        authenticated user
       parameters:
-      - description: Application name
+      - description: Application ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       produces:
       - application/json
       responses:
         "200":
-          description: Application details
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Application'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
         "404":
           description: Application not found
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get application details
+      summary: Get application by ID
       tags:
       - Applications
-  /applications/{name}/logs:
-    get:
-      description: Get logs from a specific application
-      parameters:
-      - description: Application name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Application logs
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Application not found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get application logs
-      tags:
-      - Applications
-  /applications/{name}/ps:
-    get:
-      description: Get the running status and health of an application
-      parameters:
-      - description: Application name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Application status
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Application not found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get application status
-      tags:
-      - Applications
-  /applications/{name}/start:
-    post:
+    put:
       consumes:
       - application/json
-      description: Start a stopped application
+      description: Updates the display name of an existing application
       parameters:
-      - description: Application name
+      - description: Application ID (UUID)
         in: path
-        name: name
+        name: id
         required: true
         type: string
+      - description: Update request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.UpdateApplicationRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Application started
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Application'
+        "400":
+          description: Invalid request body or name validation failed
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "403":
+          description: User doesn't own this application
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
         "404":
           description: Application not found
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Start application
+      summary: Update application
       tags:
       - Applications
-  /applications/{name}/stop:
-    post:
-      consumes:
-      - application/json
-      description: Stop a running application
-      parameters:
-      - description: Application name
-        in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Application stopped
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Application not found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Stop application
-      tags:
-      - Applications
-  /applications/templates:
+  /applications/{id}/ps:
     get:
-      description: Get a list of available application templates
+      description: Retrieves the process status and runtime information for an application
+      parameters:
+      - description: Application ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: List of templates
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationPSResponse'
+        "400":
+          description: Invalid application ID format
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Application not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List application templates
+      summary: Get application process status
       tags:
       - Applications
+  /applications/{id}/resources:
+    get:
+      description: Retrieves used and total allocated CPU (in cores) and memory usage
+        (in bytes), along with the hardware accelerator cards for an application and
+        its services
+      parameters:
+      - description: Application ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ApplicationResourcesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Application not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get application resources
+      tags:
+      - Applications
+  /architectures:
+    get:
+      description: Retrieves a list of all available architecture templates with summary
+        information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ArchitectureSummary'
+            type: array
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List available architectures
+      tags:
+      - Catalog
+  /architectures/{id}:
+    get:
+      description: Retrieves detailed information about a specific architecture template
+      parameters:
+      - description: Architecture template ID (e.g., 'rag')
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Architecture'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Architecture not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get architecture details
+      tags:
+      - Catalog
+  /architectures/{id}/deploy-options:
+    get:
+      description: Retrieves available providers and dependency rules for all services
+        and their components within an architecture
+      parameters:
+      - description: Architecture ID (e.g., 'rag')
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsArchitecture'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Architecture not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get architecture deploy options
+      tags:
+      - Catalog
   /auth/login:
     post:
       consumes:
@@ -348,6 +1045,213 @@ paths:
       summary: Refresh access token
       tags:
       - Authentication
+  /components/{component_type}/providers/{provider_id}/params:
+    get:
+      description: Retrieves the configuration schema (JSON Schema) for a specific
+        provider within a component type. Returns a JSON Schema object with properties
+        that may include x-data-id for fields that should be populated from metadata
+        specifications.
+      parameters:
+      - description: Component type (e.g., 'vector_db', 'llm', 'embedding', 'reranker')
+        in: path
+        name: component_type
+        required: true
+        type: string
+      - description: Provider identifier (e.g., 'opensearch', 'vllm', 'watsonx')
+        in: path
+        name: provider_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JSON Schema object with $schema, type, and properties. Properties
+            may include x-data-id field indicating data should be populated from metadata
+            specifications (e.g., supported_models)
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request - Invalid component_type or provider_id
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Component type or provider not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get component provider parameters
+      tags:
+      - Catalog
+  /resources:
+    get:
+      description: Retrieves system resource information including CPU, memory, and
+        accelerator availability
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ResourcesResponse'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get system resources
+      tags:
+      - Catalog
+  /services:
+    get:
+      description: Retrieves a list of all deployable service templates. Dependency-only
+        services are excluded from this list. Returns service summaries including
+        standalone flag without endpoints and pod templates.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.ServiceSummary'
+            type: array
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List available services
+      tags:
+      - Catalog
+  /services/{id}:
+    get:
+      description: Retrieves detailed information about a specific service template
+      parameters:
+      - description: Service template ID (e.g., 'summarize')
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Service'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Service not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get service details
+      tags:
+      - Catalog
+  /services/{id}/deploy-options:
+    get:
+      description: Retrieves available providers and dependency rules for a specific
+        service
+      parameters:
+      - description: Service ID (e.g., 'digitize', 'chat')
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsService'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Service not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get service deploy options
+      tags:
+      - Catalog
+  /services/{id}/params:
+    get:
+      description: Retrieves the configuration schema (JSON Schema) for a specific
+        service. Returns a JSON Schema object with properties that define the service's
+        configurable parameters.
+      parameters:
+      - description: Service ID (e.g., 'chat', 'digitize', 'similarity')
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JSON Schema object with $schema, type, and properties defining
+            service parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request - Invalid service ID
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized - Invalid or missing access token
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Service not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get service parameters
+      tags:
+      - Catalog
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer" followed by a space and JWT token.
@@ -360,3 +1264,5 @@ tags:
   name: Authentication
 - description: Application management endpoints
   name: Applications
+- description: Catalog endpoints for architectures and services
+  name: Catalog
