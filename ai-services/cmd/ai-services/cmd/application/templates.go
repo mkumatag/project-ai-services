@@ -10,7 +10,7 @@ import (
 
 	"github.com/project-ai-services/ai-services/assets"
 	appTemplates "github.com/project-ai-services/ai-services/cmd/ai-services/cmd/application/templates"
-	"github.com/project-ai-services/ai-services/internal/pkg/catalog"
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	catalogTypes "github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
@@ -115,40 +115,33 @@ func init() {
 	templatesCmd.AddCommand(appTemplates.NewParametersCmd())
 }
 
-// listCatalogTemplates lists architectures, services, and components from the catalog.
+// listCatalogTemplates lists architectures and services from the catalog REST API.
 func listCatalogTemplates(cmd *cobra.Command) error {
-	// Create catalog provider
-	provider, err := catalog.NewCatalogProvider()
+	appClient, err := client.NewApplicationClient()
 	if err != nil {
-		return fmt.Errorf("failed to create catalog provider: %w", err)
+		return fmt.Errorf("failed to connect to catalog API: %w", err)
 	}
 
-	// Get all data
-	architectures, err := provider.ListArchitectures()
+	architectures, err := appClient.ListArchitectures()
 	if err != nil {
 		return fmt.Errorf("failed to list architectures: %w", err)
 	}
 
-	services, err := provider.ListServices()
+	services, err := appClient.ListServices()
 	if err != nil {
 		return fmt.Errorf("failed to list services: %w", err)
-	}
-
-	components, err := provider.ListComponents()
-	if err != nil {
-		return fmt.Errorf("failed to list components: %w", err)
 	}
 
 	// Section 1: Deployment Architectures with list of services
 	logger.Infoln("Available Deployment Architectures:")
 	for _, arch := range architectures {
-		displayArchitectureWithServiceList(arch)
+		displayArchitectureSummary(arch)
 	}
 
-	// Section 2: Deployment Services with metadata and required components
+	// Section 2: Deployment Services
 	logger.Infoln("\nAvailable Services:")
 	for _, svc := range services {
-		displayServiceWithComponents(svc, components)
+		displayServiceSummary(svc)
 	}
 
 	// Inform user about parameters subcommand
@@ -157,46 +150,29 @@ func listCatalogTemplates(cmd *cobra.Command) error {
 	return nil
 }
 
-// displayArchitectureWithServiceList displays an architecture with just the list of service IDs.
-func displayArchitectureWithServiceList(arch catalogTypes.Architecture) {
+// displayArchitectureSummary displays an architecture summary with its service list.
+func displayArchitectureSummary(arch catalogTypes.ArchitectureSummary) {
 	logger.Infof("- %s (%s)", arch.ID, arch.Name)
 	if arch.Description != "" {
 		logger.Infof("  Description: %s", arch.Description)
 	}
 
-	// Display list of services in this architecture
 	if len(arch.Services) > 0 {
 		logger.Infoln("  Services:")
-		for _, svcRef := range arch.Services {
-			logger.Infof("     - %s", svcRef.ID)
+		for _, svcID := range arch.Services {
+			logger.Infof("     - %s", svcID)
 		}
 	}
 }
 
-// displayServiceWithComponents displays a service with its metadata and required components.
-func displayServiceWithComponents(svc catalogTypes.Service, components []catalogTypes.Component) {
+// displayServiceSummary displays a service summary with its architectures.
+func displayServiceSummary(svc catalogTypes.ServiceSummary) {
 	logger.Infof("- %s (%s)", svc.ID, svc.Name)
 	if svc.Description != "" {
 		logger.Infof("  Description: %s", svc.Description)
 	}
 
-	// Display component dependencies
-	if len(svc.Dependencies) > 0 {
-		logger.Infoln("  Required Components:")
-		for _, dep := range svc.Dependencies {
-			// Find matching components by type
-			matchingComps := []string{}
-			for _, comp := range components {
-				if comp.ComponentType == dep.ID {
-					matchingComps = append(matchingComps, comp.ID)
-				}
-			}
-
-			if len(matchingComps) > 0 {
-				logger.Infof("    %s: %s", dep.ID, strings.Join(matchingComps, ", "))
-			} else {
-				logger.Infof("    %s: (no components available)", dep.ID)
-			}
-		}
+	if len(svc.Architectures) > 0 {
+		logger.Infof("  Architectures: %s", strings.Join(svc.Architectures, ", "))
 	}
 }

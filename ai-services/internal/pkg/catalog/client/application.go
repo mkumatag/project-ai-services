@@ -16,6 +16,8 @@ const (
 	applicationsRoute       = "/api/v1/applications"
 	getApplicationPSRoute   = "/api/v1/applications/%s/ps"
 	getApplicationRoute     = "/api/v1/applications/%s"
+	architecturesRoute      = "/api/v1/architectures"
+	servicesRoute           = "/api/v1/services"
 	svcDeployOptionsRoute   = "/api/v1/services/%s/deploy-options"
 	archDeployOptionsRoute  = "/api/v1/architectures/%s/deploy-options"
 	compProviderParamsRoute = "/api/v1/components/%s/providers/%s/params"
@@ -209,6 +211,46 @@ func (c *ApplicationClient) CreateApplication(req *models.CreateApplicationReque
 	}
 
 	return &result, nil
+}
+
+// ListArchitectures retrieves all available architecture templates from the catalog API.
+func (c *ApplicationClient) ListArchitectures() ([]types.ArchitectureSummary, error) {
+	var result []types.ArchitectureSummary
+	resp, err := c.client.HTTPClient().R().
+		SetResult(&result).
+		Get(architecturesRoute)
+	if err != nil {
+		return nil, fmt.Errorf("list architectures: %w", err)
+	}
+
+	if resp.IsError() {
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode(),
+			Message:    utils.ParseErrorResponse(resp),
+		}
+	}
+
+	return result, nil
+}
+
+// ListServices retrieves all available service templates from the catalog API.
+func (c *ApplicationClient) ListServices() ([]types.ServiceSummary, error) {
+	var result []types.ServiceSummary
+	resp, err := c.client.HTTPClient().R().
+		SetResult(&result).
+		Get(servicesRoute)
+	if err != nil {
+		return nil, fmt.Errorf("list services: %w", err)
+	}
+
+	if resp.IsError() {
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode(),
+			Message:    utils.ParseErrorResponse(resp),
+		}
+	}
+
+	return result, nil
 }
 
 // GetServiceDeployOptions retrieves deploy options for a specific service.
