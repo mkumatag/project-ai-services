@@ -1,0 +1,14 @@
+pods:
+  - name: "{{ .AppName }}--hello-world"
+    format: "index .Ports \"8000/tcp\" 0"
+    default: ""
+    alias: UI_PORT
+
+containers:
+  - name: "{{ .AppName }}--hello-world-hello-world"
+    format: ".Status"
+    alias: UI_STATUS
+
+hosts:
+  - fetch: HOST_IP
+    type: ip

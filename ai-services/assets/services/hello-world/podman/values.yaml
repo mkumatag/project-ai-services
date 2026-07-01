@@ -1,0 +1,5 @@
+hello_world:
+  image: icr.io/ai-services/hello-world-service:v0.0.1
+  log_level: "INFO"
+  max_tokens: 256
+  temperature: "0.7"

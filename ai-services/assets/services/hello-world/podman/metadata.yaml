@@ -1,0 +1,8 @@
+name: hello-world
+version: "1.0.0"
+
+# Resource requirements (single container, no UI process, no vector store)
+resources:
+  cpu: 1      # 1 core
+  memory: 536870912  # 512Mi in bytes
+  storage: 0  # No persistent storage required

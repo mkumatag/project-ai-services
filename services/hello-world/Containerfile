@@ -1,0 +1,12 @@
+FROM icr.io/ai-services-cicd/service-base:v0.0.34
+
+WORKDIR /opt/services/hello-world
+
+ENV PYTHONPATH=/opt/services
+
+COPY common /opt/services/common
+COPY hello-world/ .
+
+CMD ["/var/venv/bin/python", "-m", "uvicorn", "app:app", \
+     "--host", "0.0.0.0", "--port", "7000", \
+     "--loop", "uvloop", "--http", "httptools"]

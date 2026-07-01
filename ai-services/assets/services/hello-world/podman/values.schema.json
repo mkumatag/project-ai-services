@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "hello_world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_tokens": {
+          "type": "integer",
+          "title": "Max response tokens",
+          "description": "Maximum number of tokens the LLM may generate per response",
+          "default": 256,
+          "minimum": 64,
+          "maximum": 2048
+        },
+        "temperature": {
+          "type": "string",
+          "title": "Temperature",
+          "description": "Sampling temperature for the LLM (0 = deterministic, 1 = creative)",
+          "default": "0.7"
+        }
+      }
+    }
+  }
+}

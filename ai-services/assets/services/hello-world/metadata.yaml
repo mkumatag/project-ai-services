@@ -1,0 +1,59 @@
+# Service identification
+id: hello-world
+name: "Hello World"
+description: "A minimal service that sends a user prompt directly to the configured LLM and displays the response in the browser. Useful as a starter template or smoke-test for the LLM endpoint."
+type: service
+
+# Certification and support
+certified_by: "IBM"
+
+# Service belongs to these architectures
+architectures:
+  - rag
+
+# Dependencies on other components
+dependencies:
+  - id: llm
+
+standalone: true
+
+# About field containing detailed service information
+about:
+  - title: "Service details"
+    sections:
+      - title: "Version"
+        value: "1.0.0"
+      - title: "Large language model (LLM)"
+        value: "Any OpenAI-compatible model"
+      - title: "Inference backend"
+        values:
+          - "RedHat AI Inference with Spyre"
+          - "AI Inference on CPU"
+          - "IBM watsonx.ai on IBM Cloud"
+
+  - title: "Inputs and outputs"
+    sections:
+      - title: "Inputs"
+        values:
+          - "Free-text prompt from the browser"
+      - title: "Outputs"
+        values:
+          - "LLM-generated text response rendered in the browser"
+
+  - title: "Dependencies and integration"
+    sections:
+      - title: "External dependencies"
+        values:
+          - "Inferencing endpoint compatible with OpenAI chat completions API (required)"
+
+  - title: "Content and format support"
+    sections:
+      - title: "Languages"
+        values:
+          - "Any language supported by the configured LLM"
+
+  - title: "Assets"
+    sections:
+      - title: "Source code"
+        ctaLabel: "View source code"
+        url: "https://github.com/IBM/project-ai-services"
