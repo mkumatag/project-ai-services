@@ -165,7 +165,7 @@ func displayArchitectureSummary(arch catalogTypes.ArchitectureSummary) {
 	}
 }
 
-// displayServiceSummary displays a service summary with its architectures.
+// displayServiceSummary displays a service summary with its architectures and required components.
 func displayServiceSummary(svc catalogTypes.ServiceSummary) {
 	logger.Infof("- %s (%s)", svc.ID, svc.Name)
 	if svc.Description != "" {
@@ -174,5 +174,12 @@ func displayServiceSummary(svc catalogTypes.ServiceSummary) {
 
 	if len(svc.Architectures) > 0 {
 		logger.Infof("  Architectures: %s", strings.Join(svc.Architectures, ", "))
+	}
+
+	if len(svc.Dependencies) > 0 {
+		logger.Infoln("  Required Components:")
+		for _, dep := range svc.Dependencies {
+			logger.Infof("    - %s", dep.ID)
+		}
 	}
 }

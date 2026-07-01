@@ -230,6 +230,7 @@ func ToServiceSummary(service *types.Service) types.ServiceSummary {
 		Description:   service.Description,
 		CertifiedBy:   service.CertifiedBy,
 		Architectures: service.Architectures,
+		Dependencies:  service.Dependencies,
 		Standalone:    service.Standalone,
 	}
 }
