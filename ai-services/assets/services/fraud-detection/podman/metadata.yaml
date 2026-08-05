@@ -1,0 +1,13 @@
+name: fraud-detection
+version: "1.0.0"
+
+podTemplateExecutions:
+  - [fraud-detection.yaml.tmpl]
+
+# Resource requirements (Triton + API sidecar combined; model fits in emptyDir)
+resources:
+  cpu: 5
+  memory: 10200547328   # ~9.5 Gi in bytes (8 Gi Triton + 1.5 Gi API)
+  storage: 1073741824   # 1 Gi for emptyDir model cache
+
+# Made with Bob

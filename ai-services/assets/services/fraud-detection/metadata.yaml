@@ -1,0 +1,54 @@
+id: fraud-detection
+name: "Fraud detection"
+description: "Real-time transaction scoring using a pre-trained ONNX model served by NVIDIA Triton. Returns a fraud probability score and a binary APPROVE / REVIEW / DECLINE decision for each transaction."
+type: service
+certified_by: "IBM"
+
+architectures: []
+
+dependencies: []
+
+standalone: true
+
+about:
+  - title: "Service details"
+    sections:
+      - title: "Version"
+        value: "1.0.0"
+      - title: "Inference backend"
+        value: "NVIDIA Triton Inference Server (CPU)"
+      - title: "Supported model formats"
+        values:
+          - "ONNX"
+          - "XGBoost (via ONNX export)"
+      - title: "Model source"
+        value: "S3-compatible object storage"
+
+  - title: "Inputs and outputs"
+    sections:
+      - title: "Inputs"
+        values:
+          - "Transaction feature vector (numeric, JSON array)"
+      - title: "Outputs"
+        values:
+          - "fraud_probability: float [0, 1]"
+          - "decision: APPROVE | REVIEW | DECLINE"
+
+  - title: "Expected resource consumption"
+    sections:
+      - title: "per 100 concurrent transactions/s"
+        values:
+          - title: "Compute"
+            value: "5 CPU cores"
+          - title: "Memory"
+            value: "9.50 GB"
+          - title: "Storage"
+            value: "1.00 GB (emptyDir model cache)"
+
+  - title: "Assets"
+    sections:
+      - title: "Source code"
+        ctaLabel: "View source code"
+        url: "https://github.com/IBM/project-ai-services"
+
+# Made with Bob

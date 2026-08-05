@@ -1,0 +1,16 @@
+pods:
+  - name: "{{ .AppName }}--fraud-detection"
+    format: "index .Ports \"9000/tcp\" 0"
+    default: ""
+    alias: FRAUD_DETECTION_API_PORT
+
+containers:
+  - name: "{{ .AppName }}--fraud-detection-fraud-detection-api"
+    format: ".Status"
+    alias: API_STATUS
+
+hosts:
+  - fetch: HOST_IP
+    type: ip
+
+# Made with Bob
