@@ -1,5 +1,5 @@
 api:
-  image: icr.io/ai-services-cicd/fraud-detection-api:v0.0.1
+  image: icr.io/ai-services-private/fraud-detection-api:v0.0.1
   port: ""
   log_level: "INFO"
   reviewThreshold: 0.4   # fraud_probability above this → REVIEW
@@ -9,12 +9,10 @@ triton:
   image: quay.io/powercloud/tritonserver:2.65.0-1
   modelName: "fraud_model"
 
-model:
-  s3Endpoint: ""
-  s3Bucket: ""
-  s3Key: ""
-  s3AccessKeyId: ""
-  # @generate:password
-  s3SecretAccessKey: ""
+s3Endpoint: ""
+s3Bucket: ""
+s3Key: ""
+s3AccessKeyId: ""
+s3SecretAccessKey: ""
 
 # Made with Bob
