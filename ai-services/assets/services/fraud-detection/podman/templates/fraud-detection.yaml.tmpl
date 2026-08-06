@@ -23,10 +23,9 @@ spec:
           echo "Downloading model from s3://{{ .Values.s3Bucket }}/{{ .Values.s3Key }}"
           aws s3 cp \
             --endpoint-url "{{ .Values.s3Endpoint }}" \
+            --recursive \
             "s3://{{ .Values.s3Bucket }}/{{ .Values.s3Key }}" \
-            /model-cache/model.tar.gz
-          tar -xzf /model-cache/model.tar.gz -C /model-cache/
-          rm /model-cache/model.tar.gz
+            /model-cache/
           echo "Model ready at /model-cache/"
       volumeMounts:
         - mountPath: /model-cache
