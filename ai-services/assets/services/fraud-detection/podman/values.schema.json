@@ -12,7 +12,7 @@
     "s3Bucket": {
       "type": "string",
       "title": "Bucket name",
-      "description": "Name of the bucket that holds the model archive."
+      "description": "Name of the bucket that holds the model."
     },
     "s3Key": {
       "type": "string",
@@ -27,6 +27,19 @@
       "type": "string",
       "title": "S3 secret access key",
       "format": "password"
+    },
+    "triton": {
+      "type": "object",
+      "title": "Model settings",
+      "additionalProperties": false,
+      "properties": {
+        "modelName": {
+          "type": "string",
+          "title": "Model name",
+          "description": "Name Triton will serve the model under. Must match the directory name downloaded from S3. Example: fraud_model"
+        }
+      },
+      "required": ["modelName"]
     }
   }
 }
