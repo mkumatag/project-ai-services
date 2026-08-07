@@ -25,7 +25,7 @@ spec:
             --endpoint-url "{{ .Values.s3Endpoint }}" \
             --recursive \
             "s3://{{ .Values.s3Bucket }}/{{ .Values.s3Key }}" \
-            /model-cache/
+            /model-cache/model
           echo "Model ready at /model-cache/"
       volumeMounts:
         - mountPath: /model-cache
@@ -36,7 +36,6 @@ spec:
       command: ["tritonserver"]
       args:
         - "--model-repository=/model-cache"
-        - "--strict-model-config=false"
       livenessProbe:
         httpGet:
           path: /v2/health/live
