@@ -14,5 +14,6 @@ s3Bucket: ""
 s3Key: ""
 s3AccessKeyId: ""
 s3SecretAccessKey: ""
+modelName: "fraud_model"
 
 # Made with Bob
