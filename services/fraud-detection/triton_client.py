@@ -23,6 +23,20 @@ class TritonClient:
         host = url.removeprefix("http://").removeprefix("https://")
         self._client = httpclient.InferenceServerClient(url=host, verbose=False)
         self._model_name = model_name
+        self._input_name: str | None = None
+        self._output_name: str | None = None
+
+    def _load_tensor_names(self) -> None:
+        """Resolve input/output tensor names from Triton model metadata."""
+        meta = self._client.get_model_metadata(self._model_name)
+        self._input_name = meta["inputs"][0]["name"]
+        self._output_name = meta["outputs"][0]["name"]
+        logger.info(
+            "model=%s input=%s output=%s",
+            self._model_name,
+            self._input_name,
+            self._output_name,
+        )
 
     def is_ready(self) -> bool:
         """Return True when the model is loaded and ready to accept requests."""
@@ -45,15 +59,18 @@ class TritonClient:
             TritonClientError: on any Triton-side or network error.
         """
         try:
+            if self._input_name is None:
+                self._load_tensor_names()
+
             arr = np.array(features, dtype=np.float32)
-            infer_input = httpclient.InferInput("input__0", arr.shape, "FP32")
+            infer_input = httpclient.InferInput(self._input_name, arr.shape, "FP32")
             infer_input.set_data_from_numpy(arr)
 
             result = self._client.infer(
                 model_name=self._model_name,
                 inputs=[infer_input],
             )
-            output = result.as_numpy("output__0")
+            output = result.as_numpy(self._output_name)
             return output.flatten().tolist()
         except InferenceServerException as exc:
             raise TritonClientError(str(exc)) from exc
