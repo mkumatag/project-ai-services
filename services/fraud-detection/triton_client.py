@@ -1,8 +1,14 @@
 """
 Triton HTTP client for the fraud-detection service.
 
-Sends an inference request to Triton using the KServe v2 HTTP protocol
-and returns the raw output tensor as a flat Python list.
+Sends an inference request to Triton using the KServe v2 HTTP protocol.
+
+The fraud model exposes two output tensors:
+  - ``label``         INT64  [batch, 1]  — predicted class (0 = legit, 1 = fraud)
+  - ``probabilities`` FP32   [batch, 2]  — [P(legit), P(fraud)] per row
+
+``infer`` returns the per-row fraud probability (``probabilities[:, 1]``) as a
+flat Python list so the caller can apply its own threshold logic.
 """
 import logging
 
@@ -11,6 +17,11 @@ import tritonclient.http as httpclient
 from tritonclient.utils import InferenceServerException
 
 logger = logging.getLogger(__name__)
+
+# Names that match the fraud model's tensor spec.
+_INPUT_NAME = "float_input"
+_OUTPUT_LABEL = "label"
+_OUTPUT_PROBS = "probabilities"
 
 
 class TritonClientError(Exception):
@@ -23,20 +34,6 @@ class TritonClient:
         host = url.removeprefix("http://").removeprefix("https://")
         self._client = httpclient.InferenceServerClient(url=host, verbose=False)
         self._model_name = model_name
-        self._input_name: str | None = None
-        self._output_name: str | None = None
-
-    def _load_tensor_names(self) -> None:
-        """Resolve input/output tensor names from Triton model metadata."""
-        meta = self._client.get_model_metadata(self._model_name)
-        self._input_name = meta["inputs"][0]["name"]
-        self._output_name = meta["outputs"][0]["name"]
-        logger.info(
-            "model=%s input=%s output=%s",
-            self._model_name,
-            self._input_name,
-            self._output_name,
-        )
 
     def is_ready(self) -> bool:
         """Return True when the model is loaded and ready to accept requests."""
@@ -50,28 +47,40 @@ class TritonClient:
         Run inference for a batch of feature rows.
 
         Args:
-            features: List of feature rows, e.g. [[f0, f1, ..., fN], ...]
+            features: List of feature rows, e.g. [[f0, f1, ..., f6], ...]
+                      Each row must have exactly 7 float features.
 
         Returns:
-            Flat list of output scores, one per input row.
+            Flat list of fraud probabilities (one per input row), drawn from
+            index 1 of the ``probabilities`` output tensor.
 
         Raises:
             TritonClientError: on any Triton-side or network error.
         """
         try:
-            if self._input_name is None:
-                self._load_tensor_names()
-
             arr = np.array(features, dtype=np.float32)
-            infer_input = httpclient.InferInput(self._input_name, arr.shape, "FP32")
+            infer_input = httpclient.InferInput(_INPUT_NAME, arr.shape, "FP32")
             infer_input.set_data_from_numpy(arr)
+
+            infer_outputs = [
+                httpclient.InferRequestedOutput(_OUTPUT_LABEL),
+                httpclient.InferRequestedOutput(_OUTPUT_PROBS),
+            ]
 
             result = self._client.infer(
                 model_name=self._model_name,
                 inputs=[infer_input],
+                outputs=infer_outputs,
             )
-            output = result.as_numpy(self._output_name)
-            return output.flatten().tolist()
+
+            # probabilities shape: [batch, 2] — column 1 is P(fraud)
+            probs = result.as_numpy(_OUTPUT_PROBS)
+            fraud_probs = probs[:, 1]
+
+            labels = result.as_numpy(_OUTPUT_LABEL).flatten().tolist()
+            logger.debug("label=%s probabilities=%s", labels, probs.tolist())
+
+            return fraud_probs.flatten().tolist()
         except InferenceServerException as exc:
             raise TritonClientError(str(exc)) from exc
         except Exception as exc:

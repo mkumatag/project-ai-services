@@ -59,8 +59,12 @@ class ScoreRequest(BaseModel):
     inputs: list[list[float]] = Field(
         ...,
         min_length=1,
-        description="Batch of feature rows. Each row must contain the same number of features.",
-        examples=[[[0.1, 0.9, 3.5, 0.0, 120.5]]],
+        description=(
+            "Batch of feature rows. Each row must contain exactly 7 float features: "
+            "[distance_from_home, distance_from_last_transaction, ratio_to_median_purchase_price, "
+            "repeat_retailer, used_chip, used_pin_number, online_order]."
+        ),
+        examples=[[[9.5, 3.5, 10.0, 1.0, 0.0, 0.0, 1.0]]],
     )
 
 
