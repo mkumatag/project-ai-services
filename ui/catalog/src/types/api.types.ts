@@ -248,18 +248,18 @@ export interface ApplicationDetailsApiResponse {
     type: string;
     catalog_id: string;
     version: string;
-    components: Array<{
+    components?: Array<{
       type: string;
       provider: {
         id: string;
         name: string;
       };
       metadata?: { model?: string };
-    }>;
-    endpoints: Array<{
+    }> | null;
+    endpoints?: Array<{
       type: string;
       url: string;
-    }>;
+    }> | null;
   }>;
 }
 
@@ -355,9 +355,8 @@ export interface DeploymentService {
   catalog_id: string;
   version: string;
   components: DeploymentComponent[];
-  params?: {
-    backend?: Record<string, unknown>;
-  };
+  // Flat service-level params (e.g. s3Endpoint) or wrapped { backend: {...} } for architecture flow
+  params?: Record<string, unknown>;
 }
 
 export interface ArchitectureDeploymentPayload {

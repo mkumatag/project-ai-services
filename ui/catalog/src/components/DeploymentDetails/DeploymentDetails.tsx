@@ -193,16 +193,17 @@ const DeploymentDetails = ({
                 ?.certifiedBy === "IBM";
         const transformedServices: DeploymentServiceData[] =
           deploymentServices.map((service) => {
-            const llmComponent = service.components.find(
+            const components = service.components ?? [];
+            const llmComponent = components.find(
               (c) => c.type === "llm",
             );
-            const embeddingComponent = service.components.find(
+            const embeddingComponent = components.find(
               (c) => c.type === "embedding",
             );
-            const vectorStoreComponent = service.components.find(
+            const vectorStoreComponent = components.find(
               (c) => c.type === "vector_store",
             );
-            const rerankerComponent = service.components.find(
+            const rerankerComponent = components.find(
               (c) => c.type === "reranker",
             );
             const serviceDescription =
@@ -229,8 +230,9 @@ const DeploymentDetails = ({
 
         const transformedEndpoints: DeployIntegrationEndpoints[] =
           deploymentServices.map((service) => {
-            const uiEndpoint = service.endpoints.find((e) => e.type === "ui");
-            const apiEndpoint = service.endpoints.find((e) => e.type === "api");
+            const endpoints = service.endpoints ?? [];
+            const uiEndpoint = endpoints.find((e) => e.type === "ui");
+            const apiEndpoint = endpoints.find((e) => e.type === "api");
             const serviceDescription =
               serviceMetadataById[service.catalog_id]?.description ??
               `${service.type} service`;
@@ -244,7 +246,7 @@ const DeploymentDetails = ({
               apiDocumentaion: apiEndpoint?.url
                 ? `${apiEndpoint.url}/docs`
                 : "",
-              interactiveAPIs: service.endpoints
+              interactiveAPIs: endpoints
                 .filter((endpoint) => endpoint.type === "ui")
                 .map((endpoint) => endpoint.url),
             };

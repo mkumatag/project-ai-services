@@ -182,11 +182,20 @@ export async function transformToDeploymentPayload(
     // Wait for all components of this service to be ready
     const components = await Promise.all(componentPromises);
 
-    services.push({
+    const deploymentService: DeploymentService = {
       catalog_id: serviceId, // Use service ID directly as catalog_id
       version: serviceConfig.version,
       components,
-    });
+    };
+
+    // Include service-level params (e.g. S3 credentials for fraud-detection)
+    // Send flat — the Go validator validates these directly against values.schema.json
+    const serviceParams = serviceConfig.params || {};
+    if (Object.keys(serviceParams).length > 0) {
+      deploymentService.params = serviceParams;
+    }
+
+    services.push(deploymentService);
   }
 
   return {

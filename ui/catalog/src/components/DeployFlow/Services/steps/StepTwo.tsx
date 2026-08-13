@@ -9,6 +9,7 @@ import {
   AccordionItem,
 } from "@carbon/react";
 import { useProviderSchema } from "../hooks/useProviderSchema";
+import { useServiceParams } from "@/hooks/useServiceParams";
 import { useServiceDeployStore } from "@/store/serviceDeploy.store";
 import { ProductiveCard } from "@carbon/ibm-products";
 import { Checkmark, Edit } from "@carbon/icons-react";
@@ -50,6 +51,20 @@ export const StepTwo: React.FC<StepProps> = ({
   const currentLlmProviderId =
     tempConfig?.components?.llm?.providerId ||
     selectedServiceConfig?.components?.llm?.providerId;
+
+  // Fetch service-level schema (e.g. S3 credentials for fraud-detection)
+  const { params: serviceSchema } = useServiceParams(selectedServiceId || "");
+
+  // Parse service schema fields (flatten nested objects, same as ServiceConfigCard)
+  const serviceSchemaFields = useMemo(() => {
+    if (!serviceSchema) return [];
+    return parseSchema(serviceSchema as import("@/utils/schemaParser").JSONSchema);
+  }, [serviceSchema]);
+
+  // Cast once for use in providerParamsMap (ProviderSchema and JSONSchema are structurally compatible)
+  const serviceSchemaAsProviderSchema = serviceSchema as
+    | import("@/types/api.types").ProviderSchema
+    | null;
 
   // Get provider schema from store (already cached when LLM options were fetched)
   const { schema: providerSchema } = useProviderSchema(
@@ -466,6 +481,28 @@ export const StepTwo: React.FC<StepProps> = ({
               );
             })}
 
+            {/* Service-level schema fields (e.g. S3 credentials) — read view */}
+            {serviceSchemaFields.length > 0 &&
+              serviceSchemaFields.map((field) => {
+                const value = selectedServiceConfig.params?.[field.key];
+                const displayValue =
+                  field.type === "password"
+                    ? "••••••••"
+                    : value !== undefined && value !== null && value !== ""
+                      ? String(value)
+                      : "—";
+                return (
+                  <div key={field.key} className={styles.serviceConfigItem}>
+                    <span className={styles.serviceConfigItemLabel}>
+                      {field.label}
+                    </span>
+                    <span className={styles.serviceConfigItemValue}>
+                      {displayValue}
+                    </span>
+                  </div>
+                );
+              })}
+
             {/* Show cloud credentials dynamically based on provider schema */}
             {currentLlmProviderId && providerSchema && (
               <ServiceCredentialDisplay
@@ -641,6 +678,35 @@ export const StepTwo: React.FC<StepProps> = ({
                   );
                 })}
             </div>
+
+            {/* Service-level schema fields (e.g. S3 credentials) — edit view */}
+            {serviceSchemaFields.length > 0 && serviceSchema && (() => {
+              const sectionTitle = (serviceSchema as Record<string, unknown>).title as string | undefined;
+              return (
+              <div className={styles.cloudCredentialsSection}>
+                {sectionTitle && (
+                  <h4 className={styles.cloudCredentialsTitle}>
+                    {sectionTitle}
+                  </h4>
+                )}
+                <DynamicSchemaFields
+                  componentType={selectedServiceId || ""}
+                  providerId={selectedServiceId || ""}
+                  values={currentConfig?.params || {}}
+                  onChange={(updates) => {
+                    updateTempConfig({ params: updates });
+                  }}
+                  providerParamsMap={
+                    serviceSchemaAsProviderSchema
+                      ? { [selectedServiceId || ""]: serviceSchemaAsProviderSchema }
+                      : {}
+                  }
+                  hasValidationError={showValidationError}
+                  fieldErrors={fieldErrors}
+                />
+              </div>
+              );
+            })()}
 
             {/* Cloud credentials section - dynamically rendered based on provider schema */}
             {currentLlmProviderId && providerSchema && (

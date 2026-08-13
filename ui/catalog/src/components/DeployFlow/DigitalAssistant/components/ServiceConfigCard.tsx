@@ -16,7 +16,7 @@ import type { useBatchProviderParams } from "../hooks/useProviderParams";
 import { DynamicSchemaFields } from "./DynamicSchemaFields";
 import type { DeployOptionsComponent as Component } from "@/types/api.types";
 import { parseSchema, validateField } from "@/utils/schemaParser";
-import { useServiceParams } from "../hooks/useServiceParams";
+import { useServiceParams } from "@/hooks/useServiceParams";
 import { shouldShowParam } from "@/utils/paramFilter";
 
 interface ServiceConfigCardProps {
