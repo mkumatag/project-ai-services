@@ -23,9 +23,9 @@ spec:
     image: icr.io/ppc64le-oss/vllm-ppc64le:0.28.0
     args:
     - --model
-    - /models/ibm-granite/granite-embedding-125m
+    - ibm-granite/granite-embedding-278m-multilingual
     - --served-model-name
-    - ibm-granite/granite-embedding-125m
+    - ibm-granite/granite-embedding-278m-multilingual
     - --port=8001
     - --max-model-len=512
     - --gpu-memory-utilization=0.5
@@ -49,6 +49,7 @@ spec:
         memory: 5Gi
     ports:
     - containerPort: 8001
+      hostPort: 8001
     volumeMounts:
     - name: models
       mountPath: /models:z

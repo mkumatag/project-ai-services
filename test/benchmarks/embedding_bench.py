@@ -5,16 +5,24 @@ Evaluates latency (P50, P90, P95, P99), throughput (texts/sec, tokens/sec),
 and numerical validity across batch sizes [1, 4, 8, 16, 32, 64].
 """
 
+import sys
 import time
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 import requests
 import numpy as np
-from typing import Dict, List, Any, Optional
+
+# Ensure project root is in sys.path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from test.benchmarks.datasets import get_embedding_benchmark_payloads
 
 
 def run_embedding_benchmarks(
     endpoint: str,
-    model_name: str = "ibm-granite/granite-embedding-125m",
+    model_name: str = "ibm-granite/granite-embedding-278m-multilingual",
     batch_sizes: Optional[List[int]] = None,
     iterations_per_batch: int = 5,
     api_key: Optional[str] = None

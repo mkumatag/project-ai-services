@@ -42,7 +42,7 @@ spec:
       failureThreshold: 3
     env:
     - name: VLLM_MODEL_PATH
-      value: /models/ibm-granite/granite-3.0-8b-instruct
+      value: ibm-granite/granite-3.0-8b-instruct
     - name: AIU_WORLD_SIZE
       value: '1'
     - name: VLLM_SPYRE_USE_CB
@@ -62,6 +62,7 @@ spec:
         memory: 200Gi
     ports:
     - containerPort: 8000
+      hostPort: 8000
     volumeMounts:
     - name: models
       mountPath: /models:z

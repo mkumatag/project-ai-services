@@ -1,8 +1,9 @@
 """
 Reporting and Baseline Regression Comparator Module.
 
-Generates CSV and Markdown benchmark summaries and evaluates metrics
-against baseline SLA thresholds with configurable deviation gates.
+Generates CSV and Markdown benchmark summaries, evaluates metrics
+against baseline SLA thresholds with configurable deviation gates,
+and renders side-by-side Markdown comparison reports from run history.
 """
 
 import csv
@@ -26,12 +27,14 @@ def generate_markdown_report(results: Dict[str, Any], output_path: Path) -> str:
     # 1. Bring-Up
     if "bringup" in results:
         b = results["bringup"]
+        http_t = f"{b.get('http_ready_time_sec')}s" if b.get('http_ready_time_sec') is not None else "N/A"
+        c_health_t = f"{b.get('container_healthy_time_sec')}s" if b.get('container_healthy_time_sec') is not None else "N/A"
         lines.extend([
             "## 1. Container Bring-Up & Readiness",
             "",
-            "| Component | Endpoint | Elapsed (s) | Budget Limit (s) | Status |",
-            "|---|---|---|---|---|",
-            f"| {b.get('component')} | {b.get('endpoint')} | {b.get('bringup_time_sec')}s | {b.get('max_budget_sec')}s | {b.get('status')} |",
+            "| Component | Endpoint | HTTP Ready (s) | Container Healthy (s) | Total Bringup (s) | Budget Limit (s) | Status |",
+            "|---|---|---|---|---|---|---|",
+            f"| {b.get('component')} | {b.get('endpoint')} | {http_t} | {c_health_t} | {b.get('bringup_time_sec')}s | {b.get('max_budget_sec')}s | {b.get('status')} |",
             "",
         ])
 
@@ -70,6 +73,23 @@ def generate_markdown_report(results: Dict[str, Any], output_path: Path) -> str:
         for row in results["embedding"]:
             lines.append(f"| {row['batch_size']} | {row['avg_latency_ms']}ms | {row['p95_latency_ms']}ms | {row['throughput_texts_per_sec']} | {row['error_rate_pct']}% |")
         lines.append("")
+
+    # 5. Container & Server Metrics
+    if "container_metrics" in results and results["container_metrics"].get("available"):
+        m = results["container_metrics"]
+        lines.extend([
+            "## 5. Container & Server Runtime Metrics",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
+            f"| KV Cache Utilization | {m.get('kv_cache_usage_pct', 0.0)}% |",
+            f"| Requests Running | {m.get('num_requests_running', 0)} |",
+            f"| Requests Waiting in Queue | {m.get('num_requests_waiting', 0)} |",
+            f"| Requests Swapped | {m.get('num_requests_swapped', 0)} |",
+            f"| Total Prompt Tokens Processed | {m.get('prompt_tokens_total', 0)} |",
+            f"| Total Generation Tokens Produced | {m.get('generation_tokens_total', 0)} |",
+            "",
+        ])
 
     md_content = "\n".join(lines)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -145,3 +165,129 @@ def evaluate_against_baseline(
 
     passed = len(violations) == 0
     return passed, violations
+
+
+def generate_comparison_report(diff: Dict[str, Any], output_path: Path) -> str:
+    """
+    Render a side-by-side Markdown comparison report from a compare_runs() diff dict.
+
+    Columns show run A (baseline) value, run B (new) value, and percentage change.
+    Regressions (latency increases > 5%, throughput decreases > 5%) are flagged with ⚠️.
+    """
+
+    def _fmt(val: Any) -> str:
+        return str(val) if val is not None else "—"
+
+    def _arrow(delta: Any, higher_is_worse: bool = True) -> str:
+        """Return a directional indicator + flag for notable regressions/improvements."""
+        if delta is None:
+            return "—"
+        sign = "+" if delta >= 0 else ""
+        flag = ""
+        if higher_is_worse and delta > 5:
+            flag = " ⚠️"
+        elif not higher_is_worse and delta < -5:
+            flag = " ⚠️"
+        elif higher_is_worse and delta < -5:
+            flag = " ✅"
+        elif not higher_is_worse and delta > 5:
+            flag = " ✅"
+        return f"{sign}{delta}%{flag}"
+
+    meta = diff.get("meta", {})
+    run_a_id = (meta.get("run_id") or {}).get("a") or "A"
+    run_b_id = (meta.get("run_id") or {}).get("b") or "B"
+
+    lines = [
+        "# Benchmark Comparison Report",
+        "",
+        f"| Field | Baseline (`{run_a_id[:30]}`) | New (`{run_b_id[:30]}`) |",
+        "|---|---|---|",
+    ]
+    for field in ("timestamp", "image_type", "profile", "model_name", "passed"):
+        va = _fmt((meta.get(field) or {}).get("a"))
+        vb = _fmt((meta.get(field) or {}).get("b"))
+        lines.append(f"| {field} | {va} | {vb} |")
+    lines.append("")
+
+    # Bring-up
+    bup = diff.get("bringup")
+    if bup:
+        bt = bup.get("bringup_time_sec", {})
+        lines.extend([
+            "## Bring-Up Time",
+            "",
+            f"| Metric | Baseline | New | Δ |",
+            "|---|---|---|---|",
+            f"| Bringup Time (s) | {_fmt(bt.get('a'))} | {_fmt(bt.get('b'))} | {_arrow(bt.get('delta_pct'))} |",
+            f"| Status | {_fmt(bup.get('status',{}).get('a'))} | {_fmt(bup.get('status',{}).get('b'))} | — |",
+            "",
+        ])
+
+    # LLM
+    if diff.get("llm"):
+        lines.extend([
+            "## LLM Inference",
+            "",
+            "| Concurrency | Prompt Tokens | P95 TTFT (ms) A | P95 TTFT (ms) B | Δ TTFT | Avg ITL (ms) A | Avg ITL (ms) B | Δ ITL | Agg Tok/s A | Agg Tok/s B | Δ Tok/s |",
+            "|---|---|---|---|---|---|---|---|---|---|---|",
+        ])
+        for row in diff["llm"]:
+            ttft = row.get("p95_ttft_ms", {})
+            itl  = row.get("avg_itl_ms", {})
+            tps  = row.get("aggregate_tokens_per_sec", {})
+            lines.append(
+                f"| {_fmt(row.get('concurrency'))} "
+                f"| {_fmt(row.get('prompt_tokens'))} "
+                f"| {_fmt(ttft.get('a'))} | {_fmt(ttft.get('b'))} | {_arrow(ttft.get('delta_pct'))} "
+                f"| {_fmt(itl.get('a'))} | {_fmt(itl.get('b'))} | {_arrow(itl.get('delta_pct'))} "
+                f"| {_fmt(tps.get('a'))} | {_fmt(tps.get('b'))} | {_arrow(tps.get('delta_pct'), higher_is_worse=False)} |"
+            )
+        lines.append("")
+
+    # Reranker
+    if diff.get("reranker"):
+        lines.extend([
+            "## Cross-Encoder Reranker",
+            "",
+            "| Doc Count | P95 Latency (ms) A | P95 Latency (ms) B | Δ Latency | Throughput (docs/s) A | Throughput (docs/s) B | Δ Throughput |",
+            "|---|---|---|---|---|---|---|",
+        ])
+        for row in diff["reranker"]:
+            p95 = row.get("p95_latency_ms", {})
+            thr = row.get("throughput_docs_per_sec", {})
+            lines.append(
+                f"| {_fmt(row.get('doc_count'))} "
+                f"| {_fmt(p95.get('a'))} | {_fmt(p95.get('b'))} | {_arrow(p95.get('delta_pct'))} "
+                f"| {_fmt(thr.get('a'))} | {_fmt(thr.get('b'))} | {_arrow(thr.get('delta_pct'), higher_is_worse=False)} |"
+            )
+        lines.append("")
+
+    # Embedding
+    if diff.get("embedding"):
+        lines.extend([
+            "## Dense Vector Embedding",
+            "",
+            "| Batch Size | P95 Latency (ms) A | P95 Latency (ms) B | Δ Latency | Throughput (texts/s) A | Throughput (texts/s) B | Δ Throughput |",
+            "|---|---|---|---|---|---|---|",
+        ])
+        for row in diff["embedding"]:
+            p95 = row.get("p95_latency_ms", {})
+            thr = row.get("throughput_texts_per_sec", {})
+            lines.append(
+                f"| {_fmt(row.get('batch_size'))} "
+                f"| {_fmt(p95.get('a'))} | {_fmt(p95.get('b'))} | {_arrow(p95.get('delta_pct'))} "
+                f"| {_fmt(thr.get('a'))} | {_fmt(thr.get('b'))} | {_arrow(thr.get('delta_pct'), higher_is_worse=False)} |"
+            )
+        lines.append("")
+
+    lines.extend([
+        "> **Legend:** ⚠️ regression (>5%)  ✅ improvement (>5%)  — no data",
+        "",
+    ])
+
+    md_content = "\n".join(lines)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        f.write(md_content)
+    return md_content

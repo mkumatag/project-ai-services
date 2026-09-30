@@ -5,16 +5,24 @@ Evaluates cross-encoder document reranking latency, scoring fidelity,
 and throughput across candidate document pool sizes [1, 5, 10, 25, 50].
 """
 
+import sys
 import time
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 import requests
 import numpy as np
-from typing import Dict, List, Any, Optional
+
+# Ensure project root is in sys.path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from test.benchmarks.datasets import get_reranker_benchmark_payloads
 
 
 def run_reranker_benchmarks(
     endpoint: str,
-    model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    model_name: str = "BAAI/bge-reranker-v2-m3",
     iterations_per_payload: int = 5,
     api_key: Optional[str] = None
 ) -> List[Dict[str, Any]]:

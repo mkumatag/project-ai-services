@@ -6,6 +6,14 @@ Total Latency, and Token Generation Throughput over SSE streaming across
 concurrency levels and context lengths.
 """
 
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import time
 import json
 import requests
@@ -95,7 +103,7 @@ def _run_single_llm_request(
 
 def run_llm_benchmarks(
     endpoint: str,
-    model_name: str = "ibm-granite/granite-3.0-8b-instruct",
+    model_name: str = "ibm-granite/granite-4.1-8b",
     profile: str = "standard",
     concurrencies: Optional[List[int]] = None,
     api_key: Optional[str] = None

@@ -20,7 +20,7 @@ spec:
       type: Directory
   containers:
   - name: reranker
-    image: icr.io/ppc64le-oss/vllm-spyre:latest
+    image: icr.io/ppc64le-oss/vllm-ppc64le:0.28.0
     livenessProbe:
       httpGet:
         path: /health
@@ -31,6 +31,7 @@ spec:
       failureThreshold: 3
     ports:
     - containerPort: 8002
+      hostPort: 8002
     volumeMounts:
     - name: models
       mountPath: /models:z
@@ -39,15 +40,18 @@ spec:
       mountPath: /dev/shm
     args:
     - --model
-    - /models/BAAI/bge-reranker-large
+    - BAAI/bge-reranker-v2-m3
     - --served-model-name
-    - BAAI/bge-reranker-large
+    - BAAI/bge-reranker-v2-m3
     - --port=8002
+    - --gpu-memory-utilization=0.5
+    - --dtype=bfloat16
     - --max-model-len=1024
+    env:
+    - name: OMP_NUM_THREADS
+      value: '8'
     resources:
       requests:
-        cpu: '1'
         memory: 5Gi
       limits:
-        cpu: '1'
         memory: 5Gi

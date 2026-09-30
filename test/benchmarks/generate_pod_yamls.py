@@ -5,14 +5,35 @@ Generates deployable Podman / Kubernetes Pod YAML files for vLLM Spyre,
 vLLM CPU, Reranker, and Embedding runtimes across standard and compact profiles.
 """
 
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yaml
 
+# Ensure project root is in sys.path when executed directly
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+
+def resolve_model_target(model_name: str, models_dir: str = "/mnt/models") -> str:
+    """
+    Resolve model target argument for container launch.
+    
+    If the model exists locally in models_dir (e.g. /mnt/models/<model_name>),
+    use the container-mounted path '/models/<model_name>'.
+    Otherwise, fall back to the Hugging Face Hub repo id (e.g. 'ibm-granite/granite-embedding-125m')
+    so that vLLM downloads it automatically from Hugging Face.
+    """
+    local_path = Path(models_dir) / model_name
+    if local_path.exists() and local_path.is_dir():
+        return f"/models/{model_name}"
+    return model_name
+
 
 def generate_llm_spyre_pod_yaml(
-    model_name: str = "ibm-granite/granite-3.0-8b-instruct",
-    image: str = "icr.io/ppc64le-oss/vllm-spyre:latest",
+    model_name: str = "ibm-granite/granite-4.1-8b-fp8",
+    image: str = "registry.redhat.io/rhaii/vllm-spyre-rhel9:3.5.0",
     profile: str = "standard",
     port: int = 8000,
     models_dir: str = "/mnt/models",
@@ -24,8 +45,10 @@ def generate_llm_spyre_pod_yaml(
     max_batch_size = 32 if profile == "standard" else 16
     initial_delay = 420 if profile == "standard" else 180
 
+    model_target = resolve_model_target(model_name, models_dir)
+
     env_vars = [
-        {"name": "VLLM_MODEL_PATH", "value": f"/models/{model_name}"},
+        {"name": "VLLM_MODEL_PATH", "value": model_target},
         {"name": "AIU_WORLD_SIZE", "value": str(num_cards)},
         {"name": "VLLM_SPYRE_USE_CB", "value": "1"},
         {"name": "MAX_MODEL_LEN", "value": str(max_model_len)},
@@ -96,7 +119,7 @@ def generate_llm_spyre_pod_yaml(
                             "memory": "200Gi"
                         }
                     },
-                    "ports": [{"containerPort": port}],
+                    "ports": [{"containerPort": port, "hostPort": port}],
                     "volumeMounts": [
                         {"name": "models", "mountPath": "/models:z", "readOnly": True},
                         {"name": "dshm", "mountPath": "/dev/shm"}
@@ -108,7 +131,7 @@ def generate_llm_spyre_pod_yaml(
 
 
 def generate_llm_cpu_pod_yaml(
-    model_name: str = "ibm-granite/granite-3.0-8b-instruct",
+    model_name: str = "ibm-granite/granite-4.1-8b",
     image: str = "icr.io/ppc64le-oss/vllm-ppc64le:0.28.0",
     profile: str = "standard",
     port: int = 8000,
@@ -116,8 +139,9 @@ def generate_llm_cpu_pod_yaml(
     api_key: Optional[str] = None
 ) -> Dict[str, Any]:
     """Generate Pod YAML for vLLM CPU deployment."""
-    max_tokens = 26208 if profile == "standard" else 3072
+    max_tokens = 8096 if profile == "standard" else 3072
     max_batch = 32 if profile == "standard" else 16
+    model_target = resolve_model_target(model_name, models_dir)
 
     env_vars = [
         {"name": "VLLM_CPU_OMP_THREADS_BIND", "value": "auto"},
@@ -159,7 +183,7 @@ def generate_llm_cpu_pod_yaml(
                     "command": ["/bin/sh"],
                     "args": [
                         "-c",
-                        f"exec vllm serve /models/{model_name} "
+                        f"exec vllm serve {model_target} "
                         f"--served-model-name {model_name} "
                         f"--max-num-batched-tokens={max_tokens} "
                         f"--max-model-len={max_tokens} "
@@ -178,7 +202,7 @@ def generate_llm_cpu_pod_yaml(
                         "requests": {"cpu": "10", "memory": "150Gi"},
                         "limits": {"cpu": "10", "memory": "150Gi"}
                     },
-                    "ports": [{"containerPort": port}],
+                    "ports": [{"containerPort": port, "hostPort": port}],
                     "volumeMounts": [
                         {"name": "models", "mountPath": "/models:z", "readOnly": True},
                         {"name": "dshm", "mountPath": "/dev/shm"}
@@ -190,15 +214,18 @@ def generate_llm_cpu_pod_yaml(
 
 
 def generate_reranker_pod_yaml(
-    model_name: str = "BAAI/bge-reranker-large",
-    image: str = "icr.io/ppc64le-oss/vllm-spyre:latest",
+    model_name: str = "BAAI/bge-reranker-v2-m3",
+    image: Optional[str] = None,
     device: str = "spyre",
     port: int = 8002,
     models_dir: str = "/mnt/models"
 ) -> Dict[str, Any]:
     """Generate Pod YAML for Reranker runtime (Spyre or CPU)."""
     is_spyre = device.lower() == "spyre"
+    if image is None:
+        image = "registry.redhat.io/rhaii/vllm-spyre-rhel9:3.5.0" if is_spyre else "icr.io/ppc64le-oss/vllm-ppc64le:0.28.0"
     shm_size = "64Gi" if is_spyre else "512Mi"
+    model_target = resolve_model_target(model_name, models_dir)
 
     pod = {
         "apiVersion": "v1",
@@ -230,7 +257,7 @@ def generate_reranker_pod_yaml(
                         "timeoutSeconds": 5,
                         "failureThreshold": 3
                     },
-                    "ports": [{"containerPort": port}],
+                    "ports": [{"containerPort": port, "hostPort": port}],
                     "volumeMounts": [
                         {"name": "models", "mountPath": "/models:z", "readOnly": True},
                         {"name": "dshm", "mountPath": "/dev/shm"}
@@ -245,10 +272,10 @@ def generate_reranker_pod_yaml(
         pod["spec"]["containers"][0]["command"] = ["/bin/bash"]
         pod["spec"]["containers"][0]["args"] = [
             "-c",
-            f"/opt/app-root/spyre_entrypoint.sh --model /models/{model_name} -tp 1 --served-model-name {model_name} --port {port}"
+            f"/opt/app-root/spyre_entrypoint.sh --model {model_target} -tp 1 --served-model-name {model_name} --port {port}"
         ]
         pod["spec"]["containers"][0]["env"] = [
-            {"name": "VLLM_MODEL_PATH", "value": f"/models/{model_name}"},
+            {"name": "VLLM_MODEL_PATH", "value": model_target},
             {"name": "AIU_WORLD_SIZE", "value": "1"},
             {"name": "SENDNN_INFERENCE_WARMUP_BATCH_SIZES", "value": "4"},
             {"name": "SENDNN_INFERENCE_WARMUP_PROMPT_LENS", "value": "1024"},
@@ -260,26 +287,32 @@ def generate_reranker_pod_yaml(
         }
     else:
         pod["spec"]["containers"][0]["args"] = [
-            "--model", f"/models/{model_name}",
+            "--model", model_target,
             "--served-model-name", model_name,
             f"--port={port}",
+            "--gpu-memory-utilization=0.5",
+            "--dtype=bfloat16",
             "--max-model-len=1024"
         ]
+        pod["spec"]["containers"][0]["env"] = [
+            {"name": "OMP_NUM_THREADS", "value": "8"}
+        ]
         pod["spec"]["containers"][0]["resources"] = {
-            "requests": {"cpu": "1", "memory": "5Gi"},
-            "limits": {"cpu": "1", "memory": "5Gi"}
+            "requests": {"memory": "5Gi"},
+            "limits": {"memory": "5Gi"}
         }
 
     return pod
 
 
 def generate_embedding_pod_yaml(
-    model_name: str = "ibm-granite/granite-embedding-125m",
+    model_name: str = "ibm-granite/granite-embedding-278m-multilingual",
     image: str = "icr.io/ppc64le-oss/vllm-ppc64le:0.28.0",
     port: int = 8001,
     models_dir: str = "/mnt/models"
 ) -> Dict[str, Any]:
     """Generate Pod YAML for Embedding runtime (CPU)."""
+    model_target = resolve_model_target(model_name, models_dir)
     return {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -304,7 +337,7 @@ def generate_embedding_pod_yaml(
                     "name": "embedding",
                     "image": image,
                     "args": [
-                        "--model", f"/models/{model_name}",
+                        "--model", model_target,
                         "--served-model-name", model_name,
                         f"--port={port}",
                         "--max-model-len=512",
@@ -324,7 +357,7 @@ def generate_embedding_pod_yaml(
                         "requests": {"cpu": "2", "memory": "5Gi"},
                         "limits": {"cpu": "2", "memory": "5Gi"}
                     },
-                    "ports": [{"containerPort": port}],
+                    "ports": [{"containerPort": port, "hostPort": port}],
                     "volumeMounts": [
                         {"name": "models", "mountPath": "/models:z", "readOnly": True},
                         {"name": "dshm", "mountPath": "/dev/shm"}

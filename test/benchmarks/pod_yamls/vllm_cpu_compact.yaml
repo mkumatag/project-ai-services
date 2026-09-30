@@ -26,9 +26,8 @@ spec:
     - /bin/sh
     args:
     - -c
-    - exec vllm serve /models/ibm-granite/granite-3.0-8b-instruct --served-model-name
-      ibm-granite/granite-3.0-8b-instruct --max-num-batched-tokens=3072 --max-model-len=3072
-      --max-num-seqs=16 --port=8000
+    - exec vllm serve ibm-granite/granite-3.3-8b-instruct --served-model-name ibm-granite/granite-3.3-8b-instruct
+      --max-num-batched-tokens=3072 --max-model-len=3072 --max-num-seqs=16 --port=8000
     livenessProbe:
       httpGet:
         path: /health
@@ -51,6 +50,7 @@ spec:
         memory: 150Gi
     ports:
     - containerPort: 8000
+      hostPort: 8000
     volumeMounts:
     - name: models
       mountPath: /models:z

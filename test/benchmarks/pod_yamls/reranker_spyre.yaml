@@ -21,7 +21,7 @@ spec:
       type: Directory
   containers:
   - name: reranker
-    image: icr.io/ppc64le-oss/vllm-spyre:latest
+    image: registry.redhat.io/rhaii/vllm-spyre-rhel9:3.5.0
     livenessProbe:
       httpGet:
         path: /health
@@ -32,6 +32,7 @@ spec:
       failureThreshold: 3
     ports:
     - containerPort: 8002
+      hostPort: 8002
     volumeMounts:
     - name: models
       mountPath: /models:z
@@ -42,11 +43,11 @@ spec:
     - /bin/bash
     args:
     - -c
-    - /opt/app-root/spyre_entrypoint.sh --model /models/BAAI/bge-reranker-large -tp
-      1 --served-model-name BAAI/bge-reranker-large --port 8002
+    - /opt/app-root/spyre_entrypoint.sh --model BAAI/bge-reranker-v2-m3 -tp 1 --served-model-name
+      BAAI/bge-reranker-v2-m3 --port 8002
     env:
     - name: VLLM_MODEL_PATH
-      value: /models/BAAI/bge-reranker-large
+      value: BAAI/bge-reranker-v2-m3
     - name: AIU_WORLD_SIZE
       value: '1'
     - name: SENDNN_INFERENCE_WARMUP_BATCH_SIZES
