@@ -1,0 +1,80 @@
+# Base nginx image for all project-ai-services UI applications.
+# Built on ubi9-minimal; installs nginx 1.26 and sets the OpenShift-safe
+# permission model (UID=1001, GID=0) used by every UI service.
+#
+# Usage in a UI Containerfile:
+#   FROM <registry>/<org>/ui-nginx-base:latest
+#   COPY nginx.conf.tmpl /etc/nginx/nginx.conf.tmpl
+#   COPY --chmod=755 entrypoint.sh /entrypoint.sh
+#   COPY --from=build /app/dist /usr/share/nginx/html
+#   EXPOSE <port>
+#   CMD ["/bin/bash", "/entrypoint.sh"]
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8
+
+EXPOSE 8080
+EXPOSE 8443
+
+ENV NAME=nginx \
+    NGINX_VERSION=1.26 \
+    NGINX_SHORT_VER=126
+
+ENV SUMMARY="Base nginx ${NGINX_VERSION} image for project-ai-services UI applications" \
+    DESCRIPTION="Minimal UBI 9 image with nginx ${NGINX_VERSION} pre-installed and \
+configured for OpenShift-compatible non-root execution (UID=1001, GID=0). \
+All UI services extend this image to serve their static React/Vite builds."
+
+LABEL summary="${SUMMARY}" \
+      description="${DESCRIPTION}" \
+      io.k8s.description="${DESCRIPTION}" \
+      io.k8s.display-name="nginx ${NGINX_VERSION} UI base" \
+      io.openshift.expose-services="8080:http,8443:https" \
+      io.openshift.tags="${NAME},${NAME}-${NGINX_SHORT_VER},ui-base" \
+      name="project-ai-services/ui-nginx-base" \
+      version="1"
+
+# Install nginx 1.26, gettext (envsubst), and minimal helpers.
+# microdnf is the package manager in ubi-minimal.
+RUN microdnf -y module enable nginx:${NGINX_VERSION} && \
+    microdnf install -y --nodocs \
+        nginx \
+        gettext \
+        nss_wrapper-libs && \
+    nginx -v 2>&1 | grep -qe "nginx/${NGINX_VERSION}\." && \
+    echo "Verified nginx/${NGINX_VERSION}" && \
+    microdnf clean all
+
+# Bake in a non-root-safe default nginx.conf that:
+#   - writes pid/temp files under /tmp (writable by UID 1001)
+#   - listens on 8080 (unprivileged port)
+#   - serves /usr/share/nginx/html
+# Each UI app Containerfile replaces this with its own envsubst template at
+# runtime via entrypoint.sh, so this default is only used for smoke-testing
+# the base image itself.
+COPY nginx-base.conf /etc/nginx/nginx.conf
+
+# Create nginx working directories and apply OpenShift-safe ownership/permissions.
+# Supports:
+#   UID=1001  GID=0   (default rootless)
+#   UID=<any> GID=0   (OpenShift random UID)
+#   UID=1001  GID=<any>
+RUN mkdir -p \
+        /var/log/nginx \
+        /var/lib/nginx/tmp \
+        /run && \
+    chown -R 1001:0 \
+        /etc/nginx/nginx.conf \
+        /var/log/nginx \
+        /var/lib/nginx \
+        /run \
+        /usr/share/nginx/html && \
+    chmod ug+rw  /etc/nginx/nginx.conf && \
+    chmod -R ug+rwX \
+        /var/log/nginx \
+        /var/lib/nginx \
+        /run \
+        /usr/share/nginx/html
+
+USER 1001
+
+STOPSIGNAL SIGQUIT
