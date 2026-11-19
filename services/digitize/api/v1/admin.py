@@ -73,7 +73,7 @@ async def import_metadata(payload: models.ImportRequest):
             if has_active:
                 APIError.raise_error(
                     ErrorCode.RESOURCE_LOCKED,
-                    f"Cannot import while jobs are active. "
+                    "Cannot import while jobs are active. "
                     f"Active jobs: {', '.join(active_job_ids)}",
                 )
 
@@ -92,7 +92,7 @@ async def import_metadata(payload: models.ImportRequest):
         logger.error(f"Failed to import metadata: {exc}", exc_info=True)
         APIError.raise_error(
             ErrorCode.INTERNAL_SERVER_ERROR,
-            f"Import failed: {exc}",
+            "Import failed",
         )
 
 
@@ -147,7 +147,7 @@ async def export_metadata(
             if has_active:
                 APIError.raise_error(
                     ErrorCode.RESOURCE_LOCKED,
-                    f"Cannot export while jobs are active. "
+                    "Cannot export while jobs are active. "
                     f"Active jobs: {', '.join(active_job_ids)}",
                 )
 

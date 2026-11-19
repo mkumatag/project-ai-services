@@ -92,6 +92,12 @@ const (
 	ProxyRouteOpRegisterEgress ProxyRouteOp = "register_egress"
 )
 
+// RouteRule defines an exact (method, path) rule on a private ingress route.
+type RouteRule struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+}
+
 // ProxyRoute is the unified payload for COMMAND_TYPE_PROXY_ROUTE.
 // Op selects the operation; the remaining fields are populated as needed by
 // each op (register uses all route fields; register_ingress uses ID, PathPrefix,
@@ -105,6 +111,7 @@ type ProxyRoute struct {
 	Upstream          string       `json:"upstream,omitempty"`
 	Terminal          bool         `json:"terminal,omitempty"`
 	Type              string       `json:"type,omitempty"`
+	AllowedRules      []RouteRule  `json:"allowed_rules,omitempty"`
 	ClientCertPath    string       `json:"client_cert_path,omitempty"`
 	ClientKeyPath     string       `json:"client_key_path,omitempty"`
 	TrustedCACertPath string       `json:"trusted_ca_cert_path,omitempty"`
@@ -120,11 +127,12 @@ type Route struct {
 	Type        string // endpoint type label (e.g. "ui", "api")
 	ExternalURL string // fully-qualified HTTPS URL built by the worker from its own env
 
-	PathPrefix        string // URL path prefix to match for private ingress/egress routes
-	ClientCertPath    string // egress: client certificate presented to the upstream
-	ClientKeyPath     string // egress: client private key (plaintext PEM)
-	TrustedCACertPath string // egress: CA used to verify the upstream
-	ServerName        string // egress: TLS server name to verify the upstream against
+	PathPrefix        string      // URL path prefix to match for private ingress/egress routes
+	AllowedRules      []RouteRule // exact (method, path) allow-list for ingress routes
+	ClientCertPath    string      // egress: client certificate presented to the upstream
+	ClientKeyPath     string      // egress: client private key (plaintext PEM)
+	TrustedCACertPath string      // egress: CA used to verify the upstream
+	ServerName        string      // egress: TLS server name to verify the upstream against
 }
 
 // ─── HTTP proxy ───────────────────────────────────────────────────────────────

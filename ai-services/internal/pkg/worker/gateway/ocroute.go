@@ -12,6 +12,8 @@ import (
 const (
 	// gatewayRouteName is the OpenShift Route name for the worker-gateway passthrough route.
 	gatewayRouteName = "catalog-worker-gateway"
+	// catalogAPIRouteName is the OpenShift Route name for the catalog backend API route.
+	catalogAPIRouteName = "catalog-api"
 )
 
 // GatewayRouteHost looks up the live OpenShift passthrough route for the worker
@@ -44,4 +46,31 @@ func GatewayRouteHost(ctx context.Context) (string, error) {
 	}
 
 	return "", fmt.Errorf("worker gateway: route %q not found (selector=%s)", gatewayRouteName, labelSelector)
+}
+
+// CatalogAPIRouteHost looks up the live OpenShift Route for the catalog API
+// and returns its hostname (.spec.host).
+func CatalogAPIRouteHost(ctx context.Context) (string, error) {
+	oc, err := runtimeopenshift.NewOpenshiftClientWithNamespace(catalogconstants.CatalogAppName)
+	if err != nil {
+		return "", fmt.Errorf("catalog route: create OpenShift client to look up catalog-api route: %w", err)
+	}
+
+	labelSelector := fmt.Sprintf("%s=%s", constants.ApplicationAnnotationKey, catalogconstants.CatalogAppName)
+	routes, err := oc.ListRoutes(ctx, labelSelector)
+	if err != nil {
+		return "", fmt.Errorf("catalog route: list routes (selector=%s): %w", labelSelector, err)
+	}
+
+	for _, r := range routes {
+		if r.Name == catalogAPIRouteName {
+			if r.HostPort == "" {
+				return "", fmt.Errorf("catalog route: route %q exists but has no host assigned yet", catalogAPIRouteName)
+			}
+
+			return r.HostPort, nil
+		}
+	}
+
+	return "", fmt.Errorf("catalog route: route %q not found (selector=%s)", catalogAPIRouteName, labelSelector)
 }
