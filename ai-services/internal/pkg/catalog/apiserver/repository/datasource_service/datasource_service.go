@@ -47,6 +47,8 @@ type DatasourceService struct {
 	catalogProvider *catalog.CatalogProvider
 	workerRegistry  stream.WorkerRegistry
 	encryptionKey   string
+	// tokens supplies the catalog's own token for calls to a service's /v1/connectors.
+	tokens catalogclient.InternalTokenProvider
 	// testers maps providerID → ConnectionTester. Populated by NewDatasourceService.
 	testers map[string]ConnectionTester
 }
@@ -63,6 +65,7 @@ func NewDatasourceService(
 	catalogProvider *catalog.CatalogProvider,
 	workerRegistry stream.WorkerRegistry,
 	encryptionKey string,
+	tokens catalogclient.InternalTokenProvider,
 ) *DatasourceService {
 	return &DatasourceService{
 		connectorRepo:   connectorRepo,
@@ -72,6 +75,7 @@ func NewDatasourceService(
 		catalogProvider: catalogProvider,
 		workerRegistry:  workerRegistry,
 		encryptionKey:   encryptionKey,
+		tokens:          tokens,
 		testers: map[string]ConnectionTester{
 			catalogconstants.DatasourceProviderObjectStorage: NewObjectStorageTester(),
 			catalogconstants.DatasourceProviderFileSystem:    NewFileSystemTester(),
@@ -704,7 +708,7 @@ func (s *DatasourceService) sendToService(
 		ConnectionDetails: connectionDetails,
 	}
 
-	if err := catalogclient.NewServiceClient(proxy, svc.URL).Connect(ctx, connectReq); err != nil {
+	if err := catalogclient.NewServiceClient(proxy, svc.URL, s.tokens).Connect(ctx, connectReq); err != nil {
 		return &ValidationError{
 			Code:    http.StatusBadGateway,
 			Message: fmt.Sprintf("failed to connect datasource to service %s: %v", svc.ServiceCatalogID, err),
@@ -932,7 +936,7 @@ func (s *DatasourceService) disconnectOneDatasource(ctx context.Context, proxy h
 	for _, svc := range linkedServices {
 		url := extractInternalEndpointURL(svc.EndpointsJSON)
 		if url != "" {
-			err := catalogclient.NewServiceClient(proxy, url).Disconnect(ctx, datasourceID.String())
+			err := catalogclient.NewServiceClient(proxy, url, s.tokens).Disconnect(ctx, datasourceID.String())
 			if err != nil {
 				var httpErr *catalogclient.ServiceHTTPError
 				if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
@@ -1101,7 +1105,7 @@ func (s *DatasourceService) propagateToService(
 		}
 	}
 
-	if err := catalogclient.NewServiceClient(proxy, baseURL).UpdateConnector(ctx, datasourceID.String(), credPayload); err != nil {
+	if err := catalogclient.NewServiceClient(proxy, baseURL, s.tokens).UpdateConnector(ctx, datasourceID.String(), credPayload); err != nil {
 		return &apimodels.PropagationError{
 			ID:    svc.ApplicationID.String(),
 			Name:  svc.ApplicationName,
@@ -1152,7 +1156,7 @@ func (s *DatasourceService) fetchServiceSyncDetails(ctx context.Context, proxy h
 		}
 	}
 
-	state, err := catalogclient.NewServiceClient(proxy, baseURL).GetConnectorSync(ctx, connectorID.String())
+	state, err := catalogclient.NewServiceClient(proxy, baseURL, s.tokens).GetConnectorSync(ctx, connectorID.String())
 	if err != nil {
 		logger.WarningfCtx(ctx, "failed to fetch sync state for connector %s from %s: %v", connectorID, baseURL, err)
 
@@ -1313,7 +1317,7 @@ func (s *DatasourceService) fetchServiceConnectors(ctx context.Context, proxy ht
 		return "", empty
 	}
 
-	page, err := catalogclient.NewServiceClient(proxy, baseURL).ListConnectors(ctx, limit, offset, search)
+	page, err := catalogclient.NewServiceClient(proxy, baseURL, s.tokens).ListConnectors(ctx, limit, offset, search)
 	if err != nil {
 		logger.WarningfCtx(ctx, "failed to list connectors from service at %s: %v", baseURL, err)
 
