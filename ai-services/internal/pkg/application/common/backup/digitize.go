@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	catalogclient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/config"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	runtimeTypes "github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
@@ -26,6 +27,8 @@ const (
 	defaultDirPermission  = 0o755
 	bytesPerKB            = 1024
 	bytesPerMB            = bytesPerKB * 1024
+	// digitizeServiceName is the token audience of the digitize service.
+	digitizeServiceName = "digitize"
 )
 
 // DigitizeExportResponse represents the response from the digitize export API.
@@ -105,11 +108,18 @@ func NewDigitizeBackupClient(serviceURL string) *DigitizeBackupClient {
 func (c *DigitizeBackupClient) CallExportAPI(ctx context.Context) (*DigitizeExportResponse, error) {
 	logger.Infoln("Calling digitize Export API...")
 
+	// The service enforces authentication: send a token issued to the logged-in catalog user.
+	token, err := catalogclient.ServiceTokenForLoggedInUser(ctx, digitizeServiceName)
+	if err != nil {
+		return nil, err
+	}
+
 	var exportResponse DigitizeExportResponse
 
 	logger.Infoln("Sending export request to: /v1/export?limit=-1")
 	resp, err := c.client.R().
 		SetContext(ctx).
+		SetAuthToken(token).
 		SetQueryParam("limit", ExportAllRecordsLimit).
 		SetResult(&exportResponse).
 		Get("/v1/export")

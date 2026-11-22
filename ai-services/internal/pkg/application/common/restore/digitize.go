@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	podmanrestore "github.com/project-ai-services/ai-services/internal/pkg/application/podman/restore"
+	catalogclient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/config"
 	catalogTypes "github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
@@ -18,6 +19,9 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 )
+
+// digitizeServiceName is the token audience of the digitize service.
+const digitizeServiceName = "digitize"
 
 // ConstructMetadataFromCache reads cache files and constructs the Import API payload.
 func constructMetadataFromCache(backupDir string) (map[string]interface{}, error) {
@@ -148,6 +152,12 @@ func NewDigitizeRestoreClient(serviceURL string) *DigitizeRestoreClient {
 func (c *DigitizeRestoreClient) CallImportAPI(ctx context.Context, payload map[string]interface{}) error {
 	logger.Infoln("Calling digitize Import API...")
 
+	// The service enforces authentication: send a token issued to the logged-in catalog user.
+	token, err := catalogclient.ServiceTokenForLoggedInUser(ctx, digitizeServiceName)
+	if err != nil {
+		return err
+	}
+
 	// Prepare response container
 	var importResponse map[string]interface{}
 
@@ -155,6 +165,7 @@ func (c *DigitizeRestoreClient) CallImportAPI(ctx context.Context, payload map[s
 	logger.Infoln("Sending import request to: /v1/import")
 	resp, err := c.client.R().
 		SetContext(ctx).
+		SetAuthToken(token).
 		SetBody(payload).
 		SetResult(&importResponse).
 		Post("/v1/import")
